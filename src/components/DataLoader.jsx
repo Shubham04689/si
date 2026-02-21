@@ -58,6 +58,33 @@ export default function DataLoader({ onDataLoaded }) {
     reader.readAsText(file);
   };
 
+  const handleCreateBlankMap = () => {
+    const blankMapData = {
+      meta: {
+        title: "New Strategic Map",
+        version: "2.0"
+      },
+      nodes: [
+        {
+          id: "central_hub",
+          label: "Core Topic",
+          type: "macro",
+          content: {
+            summary: "This is a new strategic map. Define your core topic here.",
+            key_insight: "Everything starts from the center.",
+            sub_topics: [],
+            metrics: [],
+            challenges: [],
+            expert_quotes: [],
+            related_reports: []
+          }
+        }
+      ],
+      links: []
+    };
+    onDataLoaded(blankMapData, "central_hub");
+  };
+
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-background text-white p-6 z-50">
       <div className="max-w-md w-full bg-gray-900/80 backdrop-blur-md rounded-2xl border border-gray-800 p-8 shadow-2xl">
@@ -84,6 +111,19 @@ export default function DataLoader({ onDataLoaded }) {
           <p className="text-gray-300 font-medium">Click to select JSON file</p>
           <p className="text-gray-500 text-xs mt-2">Strict Schema format required</p>
         </div>
+
+        <div className="flex items-center gap-4 my-6">
+            <div className="h-px bg-gray-800 flex-1"></div>
+            <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">OR</span>
+            <div className="h-px bg-gray-800 flex-1"></div>
+        </div>
+
+        <button 
+          onClick={handleCreateBlankMap}
+          className="w-full bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 rounded-xl p-4 font-medium transition-colors flex items-center justify-center gap-2"
+        >
+          Create Blank Map (Builder Mode)
+        </button>
 
         {error && (
           <div className="mt-6 p-4 bg-red-900/30 border border-red-500/30 rounded-lg flex items-start gap-3 text-red-400 text-sm">

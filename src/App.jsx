@@ -3,7 +3,7 @@ import DataLoader from './components/DataLoader';
 import GraphEngine from './components/GraphEngine';
 import IntelligencePanel from './components/IntelligencePanel';
 import { filterGraph } from './utils/graphFilter';
-import { Share2, Maximize2 } from 'lucide-react';
+import { Share2, Maximize2, Download, Edit3 } from 'lucide-react';
 
 export default function App() {
   const [globalGraph, setGlobalGraph] = useState(null);
@@ -14,6 +14,7 @@ export default function App() {
   const [previousCenterId, setPreviousCenterId] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
 
   const handleDataLoaded = useCallback((json, initialCenterId) => {
     setGlobalGraph(json);
@@ -56,6 +57,40 @@ export default function App() {
     }
   }, [centerId, globalGraph]);
 
+  // --- Builder Mode Handlers ---
+  const handleUpdateNode = useCallback((updatedNode) => {
+    setGlobalGraph(prev => {
+      const newNodes = prev.nodes.map(n => n.id === updatedNode.id ? updatedNode : n);
+      return { ...prev, nodes: newNodes };
+    });
+    setSelectedNode(updatedNode); // Update side panel
+  }, []);
+
+  const handleAddChildNode = useCallback((newNode, linkRelation, linkStrength) => {
+    setGlobalGraph(prev => {
+      const newNodes = [...prev.nodes, newNode];
+      const newLink = {
+        source: centerId,
+        target: newNode.id,
+        relation: linkRelation,
+        strength: linkStrength
+      };
+      const newLinks = [...prev.links, newLink];
+      return { meta: prev.meta, nodes: newNodes, links: newLinks };
+    });
+  }, [centerId]);
+
+  const handleExportMap = () => {
+    if (!globalGraph) return;
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(globalGraph, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href",     dataStr);
+    downloadAnchorNode.setAttribute("download", "custom_map.json");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+  };
+
   return (
     <div className="w-screen h-screen bg-background relative overflow-hidden font-sans text-white">
       {!globalGraph ? (
@@ -78,11 +113,31 @@ export default function App() {
                       Interactive Explorer
                   </p>
               </div>
-              <div className="flex gap-4 pointer-events-auto">
-                 <button className="p-2.5 bg-gray-900/50 backdrop-blur border border-gray-700 rounded-full hover:bg-gray-800 transition shadow-lg">
-                    <Share2 size={18} className="text-gray-300" />
+              <div className="flex gap-4 pointer-events-auto items-center">
+                 <button
+                    onClick={() => setIsEditMode(!isEditMode)}
+                    className={`flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-full transition-all shadow-lg ${
+                      isEditMode 
+                        ? 'bg-amber-500 text-gray-900 shadow-amber-500/20' 
+                        : 'bg-gray-900/50 backdrop-blur border border-gray-700 text-gray-300 hover:bg-gray-800'
+                    }`}
+                 >
+                   <Edit3 size={16} />
+                   {isEditMode ? 'Builder Mode: ON' : 'Edit Mode'}
                  </button>
-                 <button className="p-2.5 bg-gray-900/50 backdrop-blur border border-gray-700 rounded-full hover:bg-gray-800 transition shadow-lg" onClick={() => {
+
+                 <button
+                    onClick={handleExportMap}
+                    className="p-2.5 bg-gray-900/50 backdrop-blur border border-gray-700 rounded-full hover:bg-gray-800 transition shadow-lg text-gray-300"
+                    title="Export Map JSON"
+                 >
+                   <Download size={18} />
+                 </button>
+
+                 <button className="p-2.5 bg-gray-900/50 backdrop-blur border border-gray-700 rounded-full hover:bg-gray-800 transition shadow-lg text-gray-300">
+                    <Share2 size={18} />
+                 </button>
+                 <button className="p-2.5 bg-gray-900/50 backdrop-blur border border-gray-700 rounded-full hover:bg-gray-800 transition shadow-lg text-gray-300" onClick={() => {
                      setGlobalGraph(null);
                      setIsPanelOpen(false);
                  }}>
@@ -95,6 +150,9 @@ export default function App() {
             node={selectedNode} 
             isOpen={isPanelOpen} 
             onClose={() => setIsPanelOpen(false)} 
+            isEditMode={isEditMode}
+            onUpdateNode={handleUpdateNode}
+            onAddChildNode={handleAddChildNode}
           />
         </>
       )}
