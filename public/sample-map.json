@@ -1,0 +1,99 @@
+{
+    "meta": {
+      "title": "Global Transformation Map",
+      "version": "1.0"
+    },
+    "nodes": [
+      {
+        "id": "climate_change",
+        "label": "Climate Change",
+        "type": "macro",
+        "description": "Global shifts in temperatures and weather patterns.",
+        "content": {
+          "summary": "Climate change refers to long-term shifts in temperatures and weather patterns, largely driven by human activities, especially the emission of greenhouse gases.",
+          "key_insight": "Transitioning to renewable energy is the most urgent priority to mitigate catastrophic impacts.",
+          "related_reports": [
+             { "title": "IPCC Assessment Report 6", "url": "https://www.ipcc.ch/" }
+          ]
+        }
+      },
+      {
+        "id": "renewable_energy",
+        "label": "Renewable Energy",
+        "type": "trend",
+        "description": "Energy from sources that are naturally replenishing.",
+        "content": {
+          "summary": "Renewable energy technologies like solar and wind are becoming cost-competitive with fossil fuels globally.",
+          "key_insight": "Grid modernization is essential for integrating intermittent renewable sources.",
+          "related_reports": [
+             { "title": "IEA Renewables 2023", "url": "https://www.iea.org/" }
+          ]
+        }
+      },
+      {
+         "id": "electric_vehicles",
+         "label": "Electric Vehicles",
+         "type": "issue",
+         "description": "Adoption of battery-powered transportation.",
+         "content": {
+           "summary": "The shift towards electric vehicles (EVs) is accelerating, aiming to decarbonize the transportation sector.",
+           "key_insight": "Battery supply chains remain a critical bottleneck for EV scaling.",
+           "related_reports": []
+         }
+      },
+      {
+        "id": "battery_tech",
+        "label": "Battery Technology",
+        "type": "trend",
+        "description": "Advancements in energy storage.",
+        "content": {
+          "summary": "New battery chemistries like Solid-State are promising higher energy density and safety.",
+          "key_insight": "Reducing reliance on rare earth metals is a key research focus.",
+          "related_reports": []
+        }
+      },
+      {
+          "id": "autonomous_driving",
+          "label": "Autonomous Driving",
+          "type": "trend",
+          "description": "Self-driving and automated transportation.",
+          "content": {
+            "summary": "AI systems capable of navigating without human input are evolving rapidly.",
+            "key_insight": "Regulatory frameworks are lagging behind technological capabilities.",
+            "related_reports": []
+          }
+      },
+      {
+          "id": "artificial_intelligence",
+          "label": "Artificial Intelligence",
+          "type": "macro",
+          "description": "Machine intelligence and automation.",
+          "content": {
+            "summary": "AI is a general-purpose technology transforming industries from healthcare to logistics.",
+            "key_insight": "Generative AI models are unlocking new paradigms for human-computer interaction.",
+            "related_reports": []
+          }
+      },
+      {
+        "id": "grid_modernization",
+        "label": "Grid Modernization",
+        "type": "issue",
+        "description": "Upgrading electrical grids for new energy types.",
+        "content": {
+          "summary": "Smart grids utilize digital communications to detect and react to local changes in usage.",
+          "key_insight": "Decentralized energy production requires bidirectional grid flows.",
+          "related_reports": []
+        }
+      }
+    ],
+    "links": [
+      { "source": "climate_change", "target": "renewable_energy", "relation": "drives demand for", "strength": 9 },
+      { "source": "renewable_energy", "target": "electric_vehicles", "relation": "enables", "strength": 8 },
+      { "source": "electric_vehicles", "target": "battery_tech", "relation": "depends on", "strength": 10 },
+      { "source": "renewable_energy", "target": "grid_modernization", "relation": "requires", "strength": 7 },
+      { "source": "electric_vehicles", "target": "autonomous_driving", "relation": "integrates with", "strength": 5 },
+      { "source": "artificial_intelligence", "target": "autonomous_driving", "relation": "powers", "strength": 9 },
+      { "source": "artificial_intelligence", "target": "grid_modernization", "relation": "optimizes", "strength": 6 },
+      { "source": "climate_change", "target": "battery_tech", "relation": "incentivizes", "strength": 6 }
+    ]
+  }

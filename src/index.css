@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #0a0f1c;
+  --color-border: #1f2937;
+}
+@layer base {
+  body {
+    @apply bg-background text-gray-100;
+    margin: 0;
+    overflow: hidden;
+  }
+}
