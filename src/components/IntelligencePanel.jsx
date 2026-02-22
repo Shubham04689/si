@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, FileText, ExternalLink, BarChart2, AlertTriangle, MessageSquare, Layers, Plus, Save, Edit2 } from 'lucide-react';
+import { X, FileText, ExternalLink, BarChart2, AlertTriangle, MessageSquare, Layers, Plus, Save, Edit2, Link as LinkIcon } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -7,11 +7,18 @@ export function cn(...inputs) {
   return twMerge(clsx(inputs));
 }
 
-export default function IntelligencePanel({ node, isOpen, onClose, isEditMode, onUpdateNode, onAddChildNode }) {
+export default function IntelligencePanel({ node, isOpen, onClose, isEditMode, onUpdateNode, onAddChildNode, onAddLink, onRemoveLink, allNodes = [], connectedNodeIds = new Set() }) {
   const [isEditingContent, setIsEditingContent] = useState(false);
   const [editForm, setEditForm] = useState({});
   const [childForm, setChildForm] = useState({ label: '', summary: '', relation: 'Connects to', strength: 5 });
   const [showChildForm, setShowChildForm] = useState(false);
+  const [showLinkForm, setShowLinkForm] = useState(false);
+  const [linkForm, setLinkForm] = useState({ targetId: '', relation: 'Connects to', strength: 5 });
+  
+  const [aiSuggestions, setAiSuggestions] = useState([]);
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const availableNodes = allNodes.filter(n => n.id !== node?.id && !connectedNodeIds.has(n.id));
 
   useEffect(() => {
     if (node) {
@@ -22,8 +29,21 @@ export default function IntelligencePanel({ node, isOpen, onClose, isEditMode, o
       });
       setIsEditingContent(false);
       setShowChildForm(false);
+      setShowLinkForm(false);
+      setAiSuggestions([]);
     }
   }, [node]);
+
+  const handleGenerateSuggestions = () => {
+    setIsGenerating(true);
+    // Simple mock AI: wait 1s, then find random unconnected nodes
+    setTimeout(() => {
+      const unconnected = allNodes.filter(n => n.id !== node?.id && !connectedNodeIds.has(n.id));
+      const shuffled = [...unconnected].sort(() => 0.5 - Math.random());
+      setAiSuggestions(shuffled.slice(0, 4));
+      setIsGenerating(false);
+    }, 1000);
+  };
 
   const handleSaveEdit = () => {
     if (!node || !onUpdateNode) return;
@@ -261,20 +281,32 @@ export default function IntelligencePanel({ node, isOpen, onClose, isEditMode, o
               </section>
             )}
             
-            {/* Builder Mode: Add Child Node */}
+            {/* Builder Mode: Add Child Node or Link */}
             {isEditMode && (
-              <section className="mt-8 pt-6 border-t border-gray-800">
-                {!showChildForm ? (
-                  <button 
-                    onClick={() => setShowChildForm(true)}
-                    className="w-full flex items-center justify-center gap-2 py-3 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/30 rounded-xl transition-colors font-medium text-sm"
-                  >
-                    <Plus size={16} />
-                    {node.type === 'macro' || node.type === 'central_hub' 
-                      ? 'Add Planet (Trend)' 
-                      : 'Add Satellite (Detail)'}
-                  </button>
-                ) : (
+              <section className="mt-8 pt-6 border-t border-gray-800 space-y-3">
+                
+                {/* Action Choice Buttons */}
+                {!showChildForm && !showLinkForm && (
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setShowChildForm(true)}
+                      className="flex-1 flex flex-col items-center justify-center gap-1 py-3 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/30 rounded-xl transition-colors font-medium text-xs text-center"
+                    >
+                      <Plus size={18} /> 
+                      {node.type === 'macro' || node.type === 'central_hub' ? 'Add Planet' : 'Add Satellite'}
+                    </button>
+                    <button 
+                      onClick={() => setShowLinkForm(true)}
+                      className="flex-1 flex flex-col items-center justify-center gap-1 py-3 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-xl transition-colors font-medium text-xs text-center"
+                    >
+                      <LinkIcon size={18} /> 
+                      Link Existing
+                    </button>
+                  </div>
+                )}
+
+                {/* Flow 1: Add New Node Form */}
+                {showChildForm && (
                   <div className="bg-gray-800/50 border border-amber-500/30 rounded-xl p-5 space-y-4">
                     <h3 className="text-sm font-semibold text-amber-400 flex items-center justify-between">
                       New Connected Node
@@ -287,7 +319,7 @@ export default function IntelligencePanel({ node, isOpen, onClose, isEditMode, o
                         type="text" 
                         value={childForm.label}
                         onChange={(e) => setChildForm({...childForm, label: e.target.value})}
-                        className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm text-white"
+                        className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm text-white focus:outline-none focus:border-amber-500"
                         placeholder="e.g. Natural Language Processing"
                       />
                     </div>
@@ -297,7 +329,7 @@ export default function IntelligencePanel({ node, isOpen, onClose, isEditMode, o
                       <textarea 
                         value={childForm.summary}
                         onChange={(e) => setChildForm({...childForm, summary: e.target.value})}
-                        className="w-full h-20 bg-gray-900 border border-gray-700 rounded p-2 text-sm text-white resize-none"
+                        className="w-full h-20 bg-gray-900 border border-gray-700 rounded p-2 text-sm text-white resize-none focus:outline-none focus:border-amber-500"
                         placeholder="Short description..."
                       />
                     </div>
@@ -309,7 +341,7 @@ export default function IntelligencePanel({ node, isOpen, onClose, isEditMode, o
                           type="text" 
                           value={childForm.relation}
                           onChange={(e) => setChildForm({...childForm, relation: e.target.value})}
-                          className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm text-white"
+                          className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm text-white focus:outline-none focus:border-amber-500"
                         />
                       </div>
                       <div>
@@ -319,7 +351,7 @@ export default function IntelligencePanel({ node, isOpen, onClose, isEditMode, o
                           min="1" max="10"
                           value={childForm.strength}
                           onChange={(e) => setChildForm({...childForm, strength: e.target.value})}
-                          className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm text-white"
+                          className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm text-white focus:outline-none focus:border-amber-500"
                         />
                       </div>
                     </div>
@@ -327,10 +359,127 @@ export default function IntelligencePanel({ node, isOpen, onClose, isEditMode, o
                     <button 
                       onClick={handleAddChild}
                       disabled={!childForm.label}
-                      className="w-full py-2 bg-amber-500 text-gray-900 font-semibold rounded-lg disabled:opacity-50 transition-opacity"
+                      className="w-full py-2 bg-amber-500 hover:bg-amber-600 text-gray-900 font-semibold rounded-lg disabled:opacity-50 transition-colors"
                     >
                       Create & Connect
                     </button>
+                  </div>
+                )}
+
+                {/* Flow 2: Link Existing Node Form */}
+                {showLinkForm && (
+                  <div className="bg-gray-800/50 border border-blue-500/30 rounded-xl p-5 space-y-4">
+                    <h3 className="text-sm font-semibold text-blue-400 flex items-center justify-between">
+                      Link Existing Node
+                      <button onClick={() => setShowLinkForm(false)} className="text-gray-400 hover:text-white"><X size={14}/></button>
+                    </h3>
+                    
+                    <div>
+                      <label className="text-xs text-gray-500 mb-1 block">Target Node</label>
+                      <select 
+                        value={linkForm.targetId}
+                        onChange={(e) => setLinkForm({...linkForm, targetId: e.target.value})}
+                        className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                      >
+                        <option value="">Select a node to connect...</option>
+                        {availableNodes.map(n => (
+                          <option key={n.id} value={n.id}>{n.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Relation Label</label>
+                        <input 
+                          type="text" 
+                          value={linkForm.relation}
+                          onChange={(e) => setLinkForm({...linkForm, relation: e.target.value})}
+                          className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Link Strength (1-10)</label>
+                        <input 
+                          type="number" 
+                          min="1" max="10"
+                          value={linkForm.strength}
+                          onChange={(e) => setLinkForm({...linkForm, strength: e.target.value})}
+                          className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+                    
+                    <button 
+                      onClick={() => {
+                        if (linkForm.targetId && onAddLink) {
+                          onAddLink(node.id, linkForm.targetId, linkForm.relation, parseInt(linkForm.strength, 10));
+                          setShowLinkForm(false);
+                          setLinkForm({ targetId: '', relation: 'Connects to', strength: 5 });
+                        }
+                      }}
+                      disabled={!linkForm.targetId}
+                      className="w-full py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg disabled:opacity-50 transition-colors"
+                    >
+                      Connect Nodes
+                    </button>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* Builder Mode: ✨ AI Connection Suggestions Box */}
+            {isEditMode && (
+              <section className="mt-8 pt-6 border-t border-gray-800">
+                <h3 className="text-sm font-semibold text-purple-400 flex items-center gap-2 mb-4">
+                  ✨ AI Connection Suggestions
+                </h3>
+                
+                {aiSuggestions.length === 0 ? (
+                  <button 
+                    onClick={handleGenerateSuggestions}
+                    disabled={isGenerating}
+                    className="w-full flex items-center justify-center gap-2 py-3 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-xl transition-colors font-medium text-sm disabled:opacity-50"
+                  >
+                    {isGenerating ? 'Analyzing Knowledge Graph...' : 'Generate AI Suggestions'}
+                  </button>
+                ) : (
+                  <div className="space-y-3 p-4 bg-gray-800/40 border border-purple-500/20 rounded-xl">
+                    <div className="flex justify-between items-center mb-2">
+                       <span className="text-xs text-gray-400">Suggested connections based on context:</span>
+                       <button onClick={handleGenerateSuggestions} className="text-xs text-purple-400 hover:text-purple-300">Regenerate</button>
+                    </div>
+                    {aiSuggestions.map(suggestion => {
+                      const isConnected = connectedNodeIds.has(suggestion.id);
+                      return (
+                        <div key={suggestion.id} className="flex items-center justify-between p-2 bg-gray-900/60 rounded border border-gray-700">
+                          <span className="text-sm text-gray-200 truncate pr-2 flex items-center gap-2" title={suggestion.label}>
+                            {/* Color coding dots based on type */}
+                            <span className={cn(
+                                "w-2 h-2 rounded-full",
+                                suggestion.type === 'macro' ? "bg-amber-400" :
+                                (suggestion.type === 'trend' || suggestion.type === 'key_driver' || suggestion.type === 'concept') ? "bg-white" : "bg-blue-400"
+                            )}></span>
+                            {suggestion.label}
+                          </span>
+                          {isConnected ? (
+                            <button 
+                              onClick={() => onRemoveLink && onRemoveLink(node.id, suggestion.id)}
+                              className="text-xs px-2 py-1 bg-red-500/10 text-red-400 border border-red-500/30 rounded hover:bg-red-500/20 whitespace-nowrap transition-colors"
+                            >
+                              Remove
+                            </button>
+                          ) : (
+                            <button 
+                              onClick={() => onAddLink && onAddLink(node.id, suggestion.id, 'AI Suggested Link', 5)}
+                              className="text-xs px-2 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded hover:bg-emerald-500/20 whitespace-nowrap transition-colors"
+                            >
+                              Connect
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </section>

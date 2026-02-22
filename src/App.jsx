@@ -1,9 +1,10 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import DataLoader from './components/DataLoader';
 import GraphEngine from './components/GraphEngine';
 import IntelligencePanel from './components/IntelligencePanel';
+import AiCommandCenter from './components/AiCommandCenter';
 import { filterGraph } from './utils/graphFilter';
-import { Share2, Maximize2, Download, Edit3 } from 'lucide-react';
+import { Share2, Maximize2, Download, Edit3, Sparkles } from 'lucide-react';
 
 export default function App() {
   const [globalGraph, setGlobalGraph] = useState(null);
@@ -15,6 +16,7 @@ export default function App() {
   const [selectedNode, setSelectedNode] = useState(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [isAiCommandCenterOpen, setIsAiCommandCenterOpen] = useState(false);
 
   const handleDataLoaded = useCallback((json, initialCenterId) => {
     setGlobalGraph(json);
@@ -80,6 +82,50 @@ export default function App() {
     });
   }, [centerId]);
 
+  const handleAddLink = useCallback((sourceId, targetId, relation, strength) => {
+    setGlobalGraph(prev => {
+      // Check if link already exists to prevent duplicates
+      const linkExists = prev.links.some(l => {
+        const s = typeof l.source === 'object' ? l.source.id : l.source;
+        const t = typeof l.target === 'object' ? l.target.id : l.target;
+        return (s === sourceId && t === targetId) || (s === targetId && t === sourceId);
+      });
+      if (linkExists) return prev;
+
+      const newLink = {
+        source: sourceId,
+        target: targetId,
+        relation: relation,
+        strength: strength
+      };
+      
+      return { ...prev, links: [...prev.links, newLink] };
+    });
+  }, []);
+
+  const handleRemoveLink = useCallback((sourceId, targetId) => {
+    setGlobalGraph(prev => {
+      const newLinks = prev.links.filter(l => {
+        const s = typeof l.source === 'object' ? l.source.id : l.source;
+        const t = typeof l.target === 'object' ? l.target.id : l.target;
+        return !((s === sourceId && t === targetId) || (s === targetId && t === sourceId));
+      });
+      return { ...prev, links: newLinks };
+    });
+  }, []);
+
+  const connectedNodeIds = useMemo(() => {
+    if (!selectedNode || !globalGraph) return new Set();
+    const set = new Set();
+    globalGraph.links.forEach(l => {
+      const s = typeof l.source === 'object' ? l.source.id : l.source;
+      const t = typeof l.target === 'object' ? l.target.id : l.target;
+      if (s === selectedNode.id) set.add(t);
+      if (t === selectedNode.id) set.add(s);
+    });
+    return set;
+  }, [selectedNode, globalGraph]);
+
   const handleExportMap = () => {
     if (!globalGraph) return;
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(globalGraph, null, 2));
@@ -114,6 +160,14 @@ export default function App() {
                   </p>
               </div>
               <div className="flex gap-4 pointer-events-auto items-center">
+                 <button
+                    onClick={() => setIsAiCommandCenterOpen(true)}
+                    className="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-full transition-all shadow-lg bg-purple-600/90 hover:bg-purple-500 text-white shadow-purple-500/20"
+                 >
+                   <Sparkles size={16} />
+                   AI Generate
+                 </button>
+
                  <button
                     onClick={() => setIsEditMode(!isEditMode)}
                     className={`flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-full transition-all shadow-lg ${
@@ -153,6 +207,19 @@ export default function App() {
             isEditMode={isEditMode}
             onUpdateNode={handleUpdateNode}
             onAddChildNode={handleAddChildNode}
+            onAddLink={handleAddLink}
+            onRemoveLink={handleRemoveLink}
+            allNodes={globalGraph.nodes}
+            connectedNodeIds={connectedNodeIds}
+          />
+          
+          <AiCommandCenter 
+            isOpen={isAiCommandCenterOpen}
+            onClose={() => setIsAiCommandCenterOpen(false)}
+            onMapGenerated={(newGraph, centerId) => {
+               setIsAiCommandCenterOpen(false);
+               handleDataLoaded(newGraph, centerId);
+            }}
           />
         </>
       )}
