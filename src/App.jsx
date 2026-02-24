@@ -4,9 +4,11 @@ import GraphEngine from './components/GraphEngine';
 import IntelligencePanel from './components/IntelligencePanel';
 import AiCommandCenter from './components/AiCommandCenter';
 import { filterGraph } from './utils/graphFilter';
-import { Share2, Maximize2, Download, Edit3, Sparkles } from 'lucide-react';
+import { Share2, Maximize2, Download, Edit3, Sparkles, PanelRight } from 'lucide-react';
 import Tooltip from './components/Tooltip';
 import ContextMenu from './components/ContextMenu';
+import AddNodeDialog from './components/AddNodeDialog';
+import { generateCompletion } from './utils/aiEngine';
 
 export default function App() {
   const [globalGraph, setGlobalGraph] = useState(null);
@@ -20,6 +22,7 @@ export default function App() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isAiCommandCenterOpen, setIsAiCommandCenterOpen] = useState(false);
   const [contextMenuState, setContextMenuState] = useState({ isOpen: false, x: 0, y: 0, node: null });
+  const [addNodeDialog, setAddNodeDialog] = useState({ isOpen: false, x: 0, y: 0, parentNode: null, isGenerating: false });
 
   const handleDataLoaded = useCallback((json, initialCenterId) => {
     setGlobalGraph(json);
@@ -155,6 +158,107 @@ export default function App() {
     });
   }, []);
 
+  const handleRemoveNodeQuick = useCallback((node) => {
+      if (window.confirm(`Destroy structural node ${node.label}?`)) {
+           setGlobalGraph(prev => {
+             const newNodes = prev.nodes.filter(n => n.id !== node.id);
+             const newLinks = prev.links.filter(l => 
+                (typeof l.source === 'object' ? l.source.id : l.source) !== node.id && 
+                (typeof l.target === 'object' ? l.target.id : l.target) !== node.id
+             );
+             return { ...prev, nodes: newNodes, links: newLinks };
+           });
+           if (centerId === node.id || selectedNode?.id === node.id) {
+             setIsPanelOpen(false);
+           }
+      }
+  }, [centerId, selectedNode]);
+
+  const handleAddNodeQuick = useCallback((parentNode, event) => {
+      setAddNodeDialog({
+          isOpen: true,
+          x: event.clientX,
+          y: event.clientY,
+          parentNode: parentNode,
+          isGenerating: false
+      });
+  }, []);
+
+  const submitNewNode = useCallback((parentNode, label) => {
+      if(!label || !label.trim()) return;
+      
+      const newNodeId = label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_') + '_' + Date.now();
+      let newType = 'peripheral_topic';
+      let group = 3;
+      let size = 15;
+
+      if (parentNode.type === 'macro' || parentNode.type === 'central_hub') {
+        newType = 'trend';
+        group = 2;
+        size = 25;
+      } else if (parentNode.type === 'trend' || parentNode.type === 'key_driver' || parentNode.type === 'lifecycle' || parentNode.type === 'concept') {
+        newType = 'issue';
+        group = 3;
+        size = 15;
+      }
+
+      const newNode = {
+        id: newNodeId,
+        label: label.trim(),
+        type: newType,
+        group: group,
+        size: size,
+        content: { summary: '', key_insight: '' }
+      };
+
+      setGlobalGraph(prev => {
+        const newNodes = [...prev.nodes, newNode];
+        const newLink = {
+          source: parentNode.id,
+          target: newNode.id,
+          relation: 'Connects to',
+          strength: 5
+        };
+        const newLinks = [...prev.links, newLink];
+        return { ...prev, nodes: newNodes, links: newLinks };
+      });
+      
+      setAddNodeDialog(prev => ({ ...prev, isOpen: false }));
+  }, []);
+
+  const handleAIGenerateBranch = async (parentNode) => {
+      setAddNodeDialog(prev => ({ ...prev, isGenerating: true }));
+
+      // Find existing children to avoid duplicates
+      const existingChildren = globalGraph.links
+          .filter(l => (typeof l.source === 'object' ? l.source.id : l.source) === parentNode.id)
+          .map(l => {
+              const tgtId = typeof l.target === 'object' ? l.target.id : l.target;
+              const node = globalGraph.nodes.find(n => n.id === tgtId);
+              return node ? node.label : '';
+          })
+          .filter(Boolean);
+
+      const systemPrompt = `You are an AI generating a single exact topic name to expand a brainstorm graph.
+The user is expanding the node: "${parentNode.label}".
+Existing children to avoid duplicating: ${existingChildren.join(', ') || 'None'}.
+Return ONLY a short, punchy 1-4 word label for a NEW logical sub-topic or branch. Do not use quotes, punctuation, or prefacing text. Just the label.`;
+
+      try {
+          const rawResponse = await generateCompletion(systemPrompt, `Generate the next logical sub-branch for "${parentNode.label}".`);
+          const label = rawResponse.replace(/["']/g, '').trim();
+          if (label) {
+             submitNewNode(parentNode, label);
+          } else {
+             throw new Error("Empty response");
+          }
+      } catch (err) {
+          console.error("AI Node Generation Failed:", err);
+          alert("AI Generation failed. Ensure AI Provider is running and API Key is correct.");
+          setAddNodeDialog(prev => ({ ...prev, isGenerating: false }));
+      }
+  };
+
   const connectedNodeIds = useMemo(() => {
     if (!selectedNode || !globalGraph) return new Set();
     const set = new Set();
@@ -187,8 +291,11 @@ export default function App() {
           <GraphEngine 
             viewGraph={viewGraph} 
             centerId={centerId} 
+            isEditMode={isEditMode}
             onNodeClick={handleNodeClick} 
             onNodeRightClick={handleNodeRightClick}
+            onAddNodeClick={handleAddNodeQuick}
+            onRemoveNodeClick={handleRemoveNodeQuick}
           />
           
           <ContextMenu 
@@ -198,6 +305,17 @@ export default function App() {
             node={contextMenuState.node}
             onClose={() => setContextMenuState(prev => ({...prev, isOpen: false}))}
             onAction={handleContextMenuAction}
+          />
+
+          <AddNodeDialog
+            isOpen={addNodeDialog.isOpen}
+            x={addNodeDialog.x}
+            y={addNodeDialog.y}
+            parentNode={addNodeDialog.parentNode}
+            isGenerating={addNodeDialog.isGenerating}
+            onClose={() => setAddNodeDialog(prev => ({ ...prev, isOpen: false }))}
+            onSubmit={submitNewNode}
+            onAIGenerate={handleAIGenerateBranch}
           />
 
           {/* Header UI overlay */}
@@ -271,8 +389,24 @@ export default function App() {
               {/* Separator */}
               <div className="w-px h-4 bg-white/10 mx-1"></div>
 
-              {/* Action Group 2 */}
-              <div className="flex items-center gap-1.5">
+              {/* Right: Actions */}
+            <div className="flex items-center gap-2">
+                 <Tooltip content={isPanelOpen ? "Hide Intelligence Panel" : "Show Intelligence Panel"} position="bottom" delay={300}>
+                   <button
+                     onClick={() => setIsPanelOpen(!isPanelOpen)}
+                     disabled={!selectedNode}
+                     className={`p-1.5 border rounded-lg transition-all active:scale-95 ${
+                        isPanelOpen 
+                        ? "bg-blue-500/20 text-blue-400 border-blue-500/50 hover:bg-blue-500/30" 
+                        : "bg-[#131a28]/80 text-gray-400 border-white/10 hover:text-white"
+                     } ${!selectedNode ? "opacity-50 cursor-not-allowed" : ""}`}
+                   >
+                     <PanelRight size={14} />
+                   </button>
+                 </Tooltip>
+                 
+                 <div className="w-px h-4 bg-white/10 mx-1"></div>
+
                  <Tooltip content="Share Environment" shortcut="S" position="bottom" delay={300}>
                    <button className="p-1.5 border border-white/10 rounded-lg text-gray-400 hover:text-blue-400 hover:border-blue-500/50 hover:bg-blue-500/10 transition-all active:scale-95">
                      <Share2 size={14} />
@@ -311,6 +445,7 @@ export default function App() {
             onAddChildNode={handleAddChildNode}
             onAddLink={handleAddLink}
             onRemoveLink={handleRemoveLink}
+            onNavigateToNode={handleNodeClick}
             allNodes={globalGraph.nodes}
             connectedNodeIds={connectedNodeIds}
           />

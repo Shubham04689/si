@@ -32,6 +32,42 @@ export default function AiCommandCenter({ isOpen, onClose, onMapGenerated }) {
     localStorage.setItem('recent_prompts', JSON.stringify(recent));
   };
 
+  const generateLayer = async (baseUrl, model, headers, systemPrompt, userPrompt) => {
+      const res = await fetch(`${baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+              model: model,
+              messages: [
+                  { role: 'system', content: systemPrompt },
+                  { role: 'user', content: userPrompt }
+              ],
+              temperature: 0.7,
+              stream: false
+          })
+      });
+
+      if (!res.ok) {
+          throw new Error(`API Error ${res.status}: ${res.statusText}`);
+      }
+
+      const data = await res.json();
+      const content = data.choices[0].message.content;
+
+      let cleanContent = content.replace(/```json\n?/g, '').replace(/```/g, '').trim();
+      const firstBrace = cleanContent.indexOf('{');
+      const lastBrace = cleanContent.lastIndexOf('}');
+      
+      if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+           throw new Error("Could not locate valid JSON object in response.");
+      }
+      
+      cleanContent = cleanContent.substring(firstBrace, lastBrace + 1);
+      return JSON.parse(cleanContent);
+  };
+
+  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
   const handleGenerate = async () => {
     if (!prompt.trim() || isGenerating) return;
     
@@ -49,14 +85,12 @@ export default function AiCommandCenter({ isOpen, onClose, onMapGenerated }) {
         const headers = { 'Content-Type': 'application/json' };
         if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
 
-        const systemPrompt = `You are a highly advanced Intelligence Analyst. Your task is to output a Strategic Intelligence Map strictly in JSON format based on the user's prompt. Do NOT wrap the JSON in markdown blocks (like \`\`\`json). Just output raw parsable JSON.
+        // ---- PHASE 1: Generate Core & Primary Branches ----
+        const phase1SystemPrompt = `You are a highly advanced Intelligence Analyst. Your task is to output a Strategic Intelligence Map strictly in JSON format based on the user's prompt. Do NOT wrap the JSON in markdown blocks. Output raw parsable JSON.
         
 The JSON exactly match this schema:
 {
-  "meta": {
-    "title": "A short, brilliant title (max 5 words)",
-    "description": "A 1-sentence description."
-  },
+  "meta": { "title": "A short, brilliant title (max 5 words)", "description": "A 1-sentence description." },
   "nodes": [
     { "id": "central_topic", "label": "Main Topic", "type": "macro", "group": 1, "size": 30, "content": { "summary": "Short paragraph", "key_insight": "One line" } },
     { "id": "sub_topic_1", "label": "Key Factor", "type": "trend", "group": 2, "size": 20, "content": { "summary": "..." } }
@@ -69,60 +103,82 @@ The JSON exactly match this schema:
 CRITICAL RULES:
 1. ALWAYS include 1 and only 1 'macro' node which acts as the center. Give it size 30.
 2. Generate 3 to 5 'trend' nodes connected to the macro node. (size 20)
-3. Generate 5+ 'peripheral_topic' nodes connected to the trends. (size 15)
+3. DO NOT generate peripheral nodes. We are only building the first layer.
 4. Ensure 'source' and 'target' in 'links' exactly match the 'id' of nodes. Use underscore_case for IDs.
-5. All 'relation' fields must be short verbs (e.g., Causes, Requires, Prevents).`;
+5. All 'relation' fields must be short verbs.`;
 
-        setGenerationStep(`Requesting synthesis from model: ${model}...`);
+        setGenerationStep(`Phase 1: Synthesizing core topology with ${model}...`);
+        
+        let masterGraph = { meta: {}, nodes: [], links: [] };
+        let centerId = "";
+        
+        const phase1Data = await generateLayer(baseUrl, model, headers, phase1SystemPrompt, prompt);
+        
+        if (!phase1Data.nodes || !phase1Data.links) throw new Error("Phase 1 failed to return valid graph schema.");
+        
+        masterGraph.meta = phase1Data.meta;
+        masterGraph.nodes = [...phase1Data.nodes];
+        masterGraph.links = [...phase1Data.links];
+        
+        centerId = masterGraph.nodes.find(n => n.type === 'macro')?.id || masterGraph.nodes[0].id;
+        
+        // Identify the branches we just created
+        const primaryBranches = masterGraph.nodes.filter(n => n.type === 'trend');
 
-        const res = await fetch(`${baseUrl}/chat/completions`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-                model: model,
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: prompt }
-                ],
-                temperature: 0.7,
-                stream: false
-            })
-        });
+        // ---- PHASE 2: Generate Sub-Branches for each Primary Branch ----
+        
+        for (let i = 0; i < primaryBranches.length; i++) {
+             const branch = primaryBranches[i];
+             setGenerationStep(`Phase 2: Deep-diving branch ${i+1}/${primaryBranches.length} (${branch.label})...`);
+             
+             // Wait to avoid rate limits (1.5 seconds)
+             await delay(1500);
+             
+             const phase2SystemPrompt = `You are a highly advanced Intelligence Analyst. Your task is to output a strictly JSON formatted map expanding upon a specific branch of a larger topic.
 
-        if (!res.ok) {
-            throw new Error(`API Error ${res.status}: ${res.statusText}`);
+The main overarching topic is: "${prompt}"
+The specific branch you need to break down and expand upon is: "${branch.label}"
+
+Return ONLY an array of new sub-topic nodes and the links connecting them back to this branch node.
+The branch node ID is "${branch.id}".
+Use this schema strictly, outputting raw parsable JSON:
+{
+  "nodes": [
+    { "id": "sub_sub_topic_1", "label": "Peripheral Idea", "type": "peripheral_topic", "group": 3, "size": 15, "content": { "summary": "Short paragraph analyzing this aspect." } }
+  ],
+  "links": [
+    { "source": "${branch.id}", "target": "sub_sub_topic_1", "relation": "Influences", "strength": 5 }
+  ]
+}
+
+CRITICAL RULES:
+1. Generate 2 to 4 'peripheral_topic' nodes. (size 15).
+2. ALL links must have "source": "${branch.id}".
+3. Use underscore_case for IDs. ENSURE THEY ARE UNIQUE across the entire graph.`;
+
+             try {
+                 const phase2Data = await generateLayer(baseUrl, model, headers, phase2SystemPrompt, `Expand on the topic: ${branch.label} in context of ${prompt}`);
+                 
+                 if (phase2Data.nodes && phase2Data.links) {
+                     masterGraph.nodes.push(...phase2Data.nodes);
+                     masterGraph.links.push(...phase2Data.links);
+                 }
+             } catch (branchErr) {
+                 console.warn(`Failed to expand branch ${branch.label}:`, branchErr);
+                 // Continue to the next branch even if one fails
+             }
         }
 
-        setGenerationStep("Parsing knowledge structure...");
-        const data = await res.json();
-        const content = data.choices[0].message.content;
-
-        let cleanContent = content.replace(/```json\n?/g, '').replace(/```/g, '').trim();
-        const firstBrace = cleanContent.indexOf('{');
-        const lastBrace = cleanContent.lastIndexOf('}');
+        setGenerationStep("Finalizing topology structure...");
         
-        if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
-             throw new Error("Could not locate valid JSON object in response.");
-        }
-        
-        cleanContent = cleanContent.substring(firstBrace, lastBrace + 1);
-        const generatedMap = JSON.parse(cleanContent);
-        
-        if (!generatedMap.nodes || !generatedMap.links || !Array.isArray(generatedMap.nodes)) {
-            throw new Error("Model failed to return valid graph schema.");
-        }
-
-        let centerId = generatedMap.nodes.find(n => n.type === 'macro')?.id;
-        if (!centerId) centerId = generatedMap.nodes[0].id; // fallback
-
         setIsGenerating(false);
         setPrompt("");
         setGenerationStep("");
-        onMapGenerated(generatedMap, centerId);
+        onMapGenerated(masterGraph, centerId);
 
     } catch (err) {
         console.error("AI Generation Failed:", err);
-        setErrorMsg(err.message || "Failed to generate map. Check your AI Settings and ensure the model is running.");
+        setErrorMsg(err.message || "Failed to generate map. Check your AI Settings and ensure the model is running and not rate-limited.");
         setIsGenerating(false);
         setGenerationStep("");
     }

@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { X, FileText, ExternalLink, BarChart2, AlertTriangle, MessageSquare, Layers, Plus, Save, Edit2, Link as LinkIcon, ChevronRight, Activity, GitCommit, Search, Sparkles, SlidersHorizontal, Maximize2, Minimize2, Shuffle } from 'lucide-react';
+import { X, FileText, ExternalLink, BarChart2, AlertTriangle, MessageSquare, Layers, Plus, Save, Edit2, Link as LinkIcon, ChevronRight, Activity, GitCommit, Search, Sparkles, SlidersHorizontal, Maximize2, Minimize2, Shuffle, FileType } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import ReactMarkdown from 'react-markdown';
+import { generateJSONCompletion } from '../utils/aiEngine';
 
 export function cn(...inputs) {
   return twMerge(clsx(inputs));
 }
 
-export default function IntelligencePanel({ node, isOpen, onClose, isEditMode, onUpdateNode, onAddChildNode, onAddLink, onRemoveLink, allNodes = [], connectedNodeIds = new Set() }) {
+export default function IntelligencePanel({ node, isOpen, onClose, isEditMode, onUpdateNode, onAddChildNode, onAddLink, onRemoveLink, onNavigateToNode, allNodes = [], connectedNodeIds = new Set() }) {
   const [isEditingContent, setIsEditingContent] = useState(false);
   const [editForm, setEditForm] = useState({});
   const [childForm, setChildForm] = useState({ label: '', summary: '', relation: 'Connects to', strength: 5 });
@@ -19,6 +21,7 @@ export default function IntelligencePanel({ node, isOpen, onClose, isEditMode, o
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isAutoFilling, setIsAutoFilling] = useState(false);
 
   const [panelWidth, setPanelWidth] = useState(450);
   const isResizing = useRef(false);
@@ -96,6 +99,9 @@ export default function IntelligencePanel({ node, isOpen, onClose, isEditMode, o
         label: node.label || '',
         summary: node.content?.summary || '',
         key_insight: node.content?.key_insight || '',
+        notes: node.content?.notes || '',
+        sub_topics: (node.content?.sub_topics || []).join('\n'),
+        challenges: (node.content?.challenges || []).join('\n')
       });
       setIsEditingContent(false);
       setShowChildForm(false);
@@ -124,11 +130,40 @@ export default function IntelligencePanel({ node, isOpen, onClose, isEditMode, o
       content: {
         ...node.content,
         summary: editForm.summary,
-        key_insight: editForm.key_insight
+        key_insight: editForm.key_insight,
+        notes: editForm.notes,
+        sub_topics: editForm.sub_topics ? editForm.sub_topics.split('\n').map(s => s.trim()).filter(Boolean) : [],
+        challenges: editForm.challenges ? editForm.challenges.split('\n').map(s => s.trim()).filter(Boolean) : []
       }
     };
     onUpdateNode(updatedNode);
     setIsEditingContent(false);
+  };
+
+  const handleAutoFillIntel = async () => {
+      setIsAutoFilling(true);
+      const systemPrompt = `You are an elite Strategic Intelligence Analyst. Generate comprehensive intelligence for the given topic.
+You must return a raw JSON object with exactly these keys:
+- "summary": A concise 2-3 sentence executive summary.
+- "key_insight": A single hard-hitting analytic insight.
+- "notes": Detailed markdown notes providing full context, historical drivers, and deep-dive logic.
+- "sub_topics": An array of strings representing relevant topics to explore further, acting as potential new branches.
+- "challenges": An array of strings representing further questions, structural challenges, or unresolved issues to investigate.`;
+
+      try {
+          const res = await generateJSONCompletion(systemPrompt, `Topic: ${editForm.label || node.label}\nProvide the intelligence as valid JSON.`);
+          setEditForm(prev => ({
+              ...prev,
+              summary: res.summary || prev.summary,
+              key_insight: res.key_insight || prev.key_insight,
+              notes: res.notes || prev.notes,
+              sub_topics: (res.sub_topics || []).join('\n'),
+              challenges: (res.challenges || []).join('\n')
+          }));
+      } catch (err) {
+          alert("Failed to auto-fill intelligence. Ensure AI Provider is connected and supports JSON format.");
+      }
+      setIsAutoFilling(false);
   };
 
   const handleAddChild = () => {
@@ -320,21 +355,71 @@ export default function IntelligencePanel({ node, isOpen, onClose, isEditMode, o
             
             {activeTab === 'Overview' && (
               <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 ease-out">
+                {isEditMode && isEditingContent && (
+                  <div className="flex justify-end border-b border-white/5 pb-4">
+                     <button 
+                         onClick={handleAutoFillIntel}
+                         disabled={isAutoFilling}
+                         className="flex items-center gap-2 px-4 py-2 bg-[#a855f7]/10 hover:bg-[#a855f7]/20 text-[#d8b4fe] border border-[#a855f7]/30 rounded-lg transition-all disabled:opacity-50 text-xs font-medium w-full justify-center"
+                     >
+                         <Sparkles size={14} className={isAutoFilling ? "animate-spin-slow" : ""} />
+                         {isAutoFilling ? "Synthesizing Node Intelligence..." : "Auto-Fill Intelligence with AI"}
+                     </button>
+                  </div>
+                )}
+
                 {/* 1. Executive Summary */}
-                {node.content?.summary && (
+                {(node.content?.summary || isEditingContent) && (
                   <section>
-                    <h3 className="text-[10px] font-mono tracking-widest text-[#5e7090] uppercase mb-3 flex items-center gap-2">
-                      <FileText size={12} className="text-blue-400" /> Executive Summary
-                    </h3>
+                    <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-[10px] font-mono tracking-widest text-[#5e7090] uppercase flex items-center gap-2">
+                          <FileText size={12} className="text-blue-400" /> Executive Summary
+                        </h3>
+                    </div>
                     {isEditMode && isEditingContent ? (
                         <textarea 
                           value={editForm.summary}
                           onChange={(e) => setEditForm({...editForm, summary: e.target.value})}
-                          className="w-full h-32 bg-[#131a28] border border-white/10 rounded-lg p-3 text-sm text-gray-300 resize-none font-sans focus:outline-none focus:border-amber-500/50"
+                          className="w-full h-24 bg-[#131a28] border border-white/10 rounded-lg p-3 text-sm text-gray-300 resize-none font-sans focus:outline-none focus:border-amber-500/50"
+                          placeholder="Analysis of this concept..."
                         />
                     ) : (
                         <div className="text-gray-300 text-[0.85rem] leading-[1.7] tracking-wide">
-                            {node.content.summary}
+                            <ReactMarkdown components={{p: React.Fragment, strong: ({node, ...props}) => <strong className="font-semibold text-gray-200" {...props} />}}>{node.content.summary?.replace(/\\n/g, '\n') || ''}</ReactMarkdown>
+                        </div>
+                    )}
+                  </section>
+                )}
+
+                {/* 1.5 Detailed Context Notes */}
+                {(node.content?.notes || isEditingContent) && (
+                  <section className="border-t border-white/5 pt-6">
+                    <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-[10px] font-mono tracking-widest text-[#5e7090] uppercase flex items-center gap-2">
+                          <FileType size={12} className="text-emerald-400" /> Comprehensive Briefing
+                        </h3>
+                    </div>
+                    {isEditMode && isEditingContent ? (
+                        <textarea 
+                          value={editForm.notes}
+                          onChange={(e) => setEditForm({...editForm, notes: e.target.value})}
+                          className="w-full h-80 bg-[#131a28] border border-white/10 rounded-lg p-4 text-sm text-gray-300 resize-y font-sans leading-relaxed focus:outline-none focus:border-emerald-500/50 custom-scrollbar"
+                          placeholder="Full contextual notes, historical drivers, and deep-dive logic..."
+                        />
+                    ) : (
+                        <div className="text-gray-300 text-[0.85rem] leading-[1.7] tracking-wide pb-4">
+                            <ReactMarkdown 
+                              components={{
+                                h2: ({node, ...props}) => <h2 className="text-white font-medium text-[0.95rem] mt-5 mb-2" {...props} />,
+                                h3: ({node, ...props}) => <h3 className="text-emerald-400 font-mono text-xs uppercase mt-4 mb-2" {...props} />,
+                                p: ({node, ...props}) => <p className="mb-3" {...props} />,
+                                ul: ({node, ...props}) => <ul className="pl-5 list-disc space-y-1 mb-3 text-gray-400" {...props} />,
+                                li: ({node, ...props}) => <li {...props} />,
+                                strong: ({node, ...props}) => <strong className="font-semibold text-gray-200" {...props} />
+                              }}
+                            >
+                               {node.content.notes?.replace(/\\n/g, '\n') || ''}
+                            </ReactMarkdown>
                         </div>
                     )}
                   </section>
@@ -353,7 +438,7 @@ export default function IntelligencePanel({ node, isOpen, onClose, isEditMode, o
                         />
                     ) : (
                         <p className="text-blue-100/90 text-[1.05rem] font-display italic leading-snug tracking-wide">
-                          "{node.content.key_insight}"
+                          "<ReactMarkdown components={{p: React.Fragment, strong: ({node, ...props}) => <strong className="font-semibold text-white/90" {...props} />}}>{node.content.key_insight?.replace(/\\n/g, '\n') || ''}</ReactMarkdown>"
                         </p>
                     )}
                   </section>
@@ -376,20 +461,29 @@ export default function IntelligencePanel({ node, isOpen, onClose, isEditMode, o
                    </section>
                 )}
 
-                {/* 5. Challenges */}
-                {node.content?.challenges && node.content.challenges.length > 0 && (
+                {/* 5. Challenges / Further Questions */}
+                {((node.content?.challenges && node.content.challenges.length > 0) || isEditingContent) && (
                    <section>
                       <h3 className="text-[10px] font-mono tracking-widest text-[#5e7090] uppercase mb-3 flex items-center gap-2">
-                        <AlertTriangle size={12} className="text-amber-400" /> Structural Challenges
+                        <AlertTriangle size={12} className="text-amber-400" /> Further Questions to Explore
                       </h3>
-                      <ul className="space-y-2.5">
-                         {node.content.challenges.map((challenge, idx) => (
-                            <li key={idx} className="flex items-start gap-2.5 text-[0.82rem] text-gray-300 leading-relaxed">
-                               <span className="text-amber-500/50 mt-[3px] text-xs">◆</span>
-                               {challenge}
-                            </li>
-                         ))}
-                      </ul>
+                      {isEditMode && isEditingContent ? (
+                          <textarea 
+                            value={editForm.challenges}
+                            onChange={(e) => setEditForm({...editForm, challenges: e.target.value})}
+                            className="w-full h-24 bg-[#131a28] border border-white/10 rounded-lg p-3 text-[0.85rem] text-gray-300 resize-none font-sans focus:outline-none focus:border-amber-500/50 leading-relaxed"
+                            placeholder="Enter further questions or challenges (one per line)..."
+                          />
+                      ) : (
+                          <ul className="space-y-2.5">
+                             {node.content.challenges.map((challenge, idx) => (
+                                <li key={idx} className="flex items-start gap-2.5 text-[0.82rem] text-gray-300 leading-relaxed">
+                                   <span className="text-amber-500/50 mt-[3px] text-xs">◆</span>
+                                   <span className="flex-1"><ReactMarkdown components={{p: React.Fragment, strong: ({node, ...props}) => <strong className="font-semibold text-amber-100" {...props} />}}>{challenge.replace(/\\n/g, '\n')}</ReactMarkdown></span>
+                                </li>
+                             ))}
+                          </ul>
+                      )}
                    </section>
                 )}
                 
@@ -415,18 +509,27 @@ export default function IntelligencePanel({ node, isOpen, onClose, isEditMode, o
             {activeTab === 'Network' && (
               <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 ease-out">
                 {/* 4. Sub-Topics / Related Concepts */}
-                {node.content?.sub_topics && node.content.sub_topics.length > 0 && (
+                {((node.content?.sub_topics && node.content.sub_topics.length > 0) || isEditingContent) && (
                    <section>
                       <h3 className="text-[10px] font-mono tracking-widest text-[#5e7090] uppercase mb-3 flex items-center gap-2">
-                        <Layers size={12} className="text-purple-400" /> Related Concepts
+                        <Layers size={12} className="text-purple-400" /> Relevant Topics to Explore
                       </h3>
-                      <div className="flex flex-wrap gap-2">
-                         {node.content.sub_topics.map((topic, idx) => (
-                            <span key={idx} className="px-3 py-1.5 bg-white/5 text-gray-300 border border-white/5 rounded-full text-[0.7rem] font-medium hover:bg-white/10 hover:border-white/10 hover:text-white transition-all cursor-default">
-                               {topic}
-                            </span>
-                         ))}
-                      </div>
+                      {isEditMode && isEditingContent ? (
+                          <textarea 
+                            value={editForm.sub_topics}
+                            onChange={(e) => setEditForm({...editForm, sub_topics: e.target.value})}
+                            className="w-full h-24 bg-[#131a28] border border-white/10 rounded-lg p-3 text-[0.85rem] text-gray-300 resize-none font-sans focus:outline-none focus:border-purple-500/50 leading-relaxed"
+                            placeholder="Enter relevant topics to explore (one per line)..."
+                          />
+                      ) : (
+                          <div className="flex flex-wrap gap-2">
+                             {node.content.sub_topics.map((topic, idx) => (
+                                <span key={idx} className="px-3 py-1.5 bg-white/5 text-gray-300 border border-white/5 rounded-full text-[0.7rem] font-medium hover:bg-white/10 hover:border-white/10 hover:text-white transition-all cursor-default">
+                                   <ReactMarkdown components={{p: React.Fragment}}>{topic.replace(/\\n/g, '\n')}</ReactMarkdown>
+                                </span>
+                             ))}
+                          </div>
+                      )}
                    </section>
                 )}
 
@@ -443,10 +546,14 @@ export default function IntelligencePanel({ node, isOpen, onClose, isEditMode, o
                         const conn = allNodes.find(n => n.id === id);
                         if (!conn) return null;
                         return (
-                          <div key={id} className="flex items-center justify-between p-2.5 bg-white/[0.02] border border-white/5 rounded-lg hover:bg-white/[0.04] transition-colors">
+                          <div 
+                            key={id} 
+                            onClick={() => onNavigateToNode(conn)}
+                            className="flex items-center justify-between p-2.5 bg-white/[0.02] border border-white/5 rounded-lg hover:bg-white/[0.04] hover:border-blue-500/30 transition-all cursor-pointer group"
+                          >
                             <div className="flex items-center gap-2.5">
                               <TypeDot type={conn.type} />
-                              <span className="text-[0.8rem] text-gray-300">{conn.label}</span>
+                              <span className="text-[0.8rem] text-gray-300 group-hover:text-blue-400 transition-colors">{conn.label}</span>
                             </div>
                             <span className="text-[9px] font-mono text-[#5e7090] uppercase tracking-wider">{conn.type}</span>
                           </div>

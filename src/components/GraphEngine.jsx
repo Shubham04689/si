@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
+import { Maximize, Lock, Unlock } from 'lucide-react';
 
 const TYPE_SIZES = {
   macro: 19,
@@ -17,10 +18,17 @@ const TYPE_SIZES = {
 
 const TIER_ORDER = { satellite: 1, peripheral_topic: 1, issue: 1, detail: 1, history: 2, trend: 3, key_driver: 3, concept: 3, macro: 4, central_hub: 4, center: 5 };
 
-export default function GraphEngine({ viewGraph, centerId, selectedNodeId, onNodeClick }) {
+export default function GraphEngine({ viewGraph, centerId, isEditMode, selectedNodeId, onNodeClick, onNodeRightClick, onAddNodeClick, onRemoveNodeClick }) {
   const fgRef = useRef();
   const [hoverNode, setHoverNode] = useState(null);
   const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
+  const [isZoomLocked, setIsZoomLocked] = useState(false);
+
+  const handleZoomToFit = useCallback(() => {
+    if (fgRef.current) {
+        fgRef.current.zoomToFit(800, 80);
+    }
+  }, []);
 
   useEffect(() => {
     let timer;
@@ -38,18 +46,18 @@ export default function GraphEngine({ viewGraph, centerId, selectedNodeId, onNod
   }, []);
 
   useEffect(() => {
-    if (centerId && fgRef.current && viewGraph.nodes.length) {
+    if (centerId && fgRef.current && viewGraph.nodes.length && !isZoomLocked) {
       const node = viewGraph.nodes.find(n => n.id === centerId);
       if (node) {
         setTimeout(() => {
-            if (fgRef.current) {
+            if (fgRef.current && !isZoomLocked) {
                 fgRef.current.centerAt(node.x, node.y, 1000);
                 fgRef.current.zoom(1.2, 1000);
             }
         }, 300);
       }
     }
-  }, [centerId, viewGraph]);
+  }, [centerId, viewGraph, isZoomLocked]);
 
   useEffect(() => {
     if (!fgRef.current) return;
@@ -100,15 +108,15 @@ export default function GraphEngine({ viewGraph, centerId, selectedNodeId, onNod
     const isCenter = node.id === centerId || node.viewType === 'center';
     const isHistory = node.viewType === 'history';
     
+    let targetSize = TYPE_SIZES[node.type] || 5;
+    if (isCenter) targetSize = 19;
+    if (isHistory) targetSize = 7.5;
+    
     const isConnectedHover = hoverNode && hoverLinks.size > 0 && Array.from(hoverLinks).some(l => 
         (typeof l.source === 'object' ? l.source.id : l.source) === node.id || 
         (typeof l.target === 'object' ? l.target.id : l.target) === node.id
     );
     const dimOtherNodes = hoverNode && !isHovered && !isConnectedHover;
-
-    let targetSize = TYPE_SIZES[node.type] || 5;
-    if (isCenter) targetSize = 19;
-    if (isHistory) targetSize = 7.5;
 
     // Birth animation
     const age = Date.now() - (node.createdAt || 0);
@@ -224,8 +232,49 @@ export default function GraphEngine({ viewGraph, centerId, selectedNodeId, onNod
                        'rgba(255, 255, 255, 0.28)';
         ctx.fillText(label, node.x, node.y - size - (fontSize * 0.8));
     }
+
+    // Badges (+ and -)
+    if (!dimOtherNodes && node.id) { // Ensure node has data
+        const btnRadius = 6/globalScale;
+        
+        // + button (always visible)
+        const plusX = node.x + targetSize + 8/globalScale;
+        const plusY = node.y;
+        
+        ctx.beginPath();
+        ctx.arc(plusX, plusY, btnRadius, 0, 2*Math.PI);
+        ctx.fillStyle = 'rgba(59, 130, 246, 0.9)'; // blue-500
+        ctx.fill();
+        ctx.lineWidth = 1/globalScale;
+        ctx.strokeStyle = '#2563eb'; // blue-600
+        ctx.stroke();
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = `bold ${10/globalScale}px sans-serif`;
+        ctx.fillText('+', plusX, plusY + 0.5/globalScale);
+        
+        // - button (visible in edit mode)
+        if (isEditMode && node.id !== centerId) { 
+            const minusX = node.x + targetSize*0.7;
+            const minusY = node.y - targetSize - 6/globalScale;
+            
+            ctx.beginPath();
+            ctx.arc(minusX, minusY, btnRadius, 0, 2*Math.PI);
+            ctx.fillStyle = 'rgba(239, 68, 68, 0.9)'; // red-500
+            ctx.fill();
+            ctx.strokeStyle = '#dc2626'; // red-600
+            ctx.stroke();
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `bold ${8/globalScale}px sans-serif`;
+            ctx.fillText('−', minusX, minusY + 0.5/globalScale); 
+        }
+    }
+
     ctx.restore();
-  }, [hoverNode, hoverLinks, centerId, selectedNodeId]);
+  }, [hoverNode, hoverLinks, centerId, selectedNodeId, isEditMode]);
 
   const drawLink = useCallback((link, ctx, globalScale) => {
     const isConnectedHover = hoverLinks.has(link);
@@ -393,6 +442,71 @@ export default function GraphEngine({ viewGraph, centerId, selectedNodeId, onNod
       ctx.restore();
   }, [dimensions]);
 
+  const nodePointerAreaPaint = useCallback((node, color, ctx, globalScale) => {
+    ctx.fillStyle = color;
+    let targetSize = TYPE_SIZES[node.type] || 5;
+    const isCenter = node.id === centerId || node.viewType === 'center';
+    const isHistory = node.viewType === 'history';
+    if (isCenter) targetSize = 19;
+    if (isHistory) targetSize = 7.5;
+    
+    // Draw main circle hit area
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, targetSize, 0, 2 * Math.PI, false);
+    ctx.fill();
+
+    const btnRadius = 6 / globalScale;
+    const hoverLeniency = 4 / globalScale;
+
+    // + button hit area
+    ctx.beginPath();
+    ctx.arc(node.x + targetSize + 8/globalScale, node.y, btnRadius + hoverLeniency, 0, 2*Math.PI, false);
+    ctx.fill();
+    
+    // - button hit area
+    if (isEditMode && node.id !== centerId) {
+       ctx.beginPath();
+       ctx.arc(node.x + targetSize*0.7, node.y - targetSize - 6/globalScale, btnRadius + hoverLeniency, 0, 2*Math.PI, false);
+       ctx.fill();
+    }
+  }, [centerId, isEditMode]);
+
+  const handleNodeClickWrap = useCallback((node, event) => {
+      if (!fgRef.current) return;
+      
+      const { x: graphX, y: graphY } = fgRef.current.screen2GraphCoords(event.clientX, event.clientY);
+      const globalScale = fgRef.current.zoom();
+      
+      let targetSize = TYPE_SIZES[node.type] || 5;
+      if (node.id === centerId || node.viewType === 'center') targetSize = 19;
+      if (node.viewType === 'history') targetSize = 7.5;
+
+      const btnRadius = 6 / globalScale;
+      const hitLeniency = 2 / globalScale;
+      
+      // Check + button
+      const plusX = node.x + targetSize + 8/globalScale;
+      const plusY = node.y;
+      
+      if (Math.hypot(graphX - plusX, graphY - plusY) <= btnRadius + hitLeniency) {
+         if (onAddNodeClick) onAddNodeClick(node, event);
+         return; // We handled the click
+      }
+
+      // Check - button
+      if (isEditMode && node.id !== centerId) {
+          const minusX = node.x + targetSize * 0.7;
+          const minusY = node.y - targetSize - 6/globalScale;
+          if (Math.hypot(graphX - minusX, graphY - minusY) <= btnRadius + hitLeniency) {
+             if (onRemoveNodeClick) onRemoveNodeClick(node);
+             return;
+          }
+      }
+
+      // Default click behavior
+      if (onNodeClick) onNodeClick(node, event);
+  }, [centerId, isEditMode, onAddNodeClick, onRemoveNodeClick, onNodeClick]);
+
   return (
     <div className="absolute inset-0 bg-background overflow-hidden cursor-move">
       <ForceGraph2D
@@ -402,17 +516,41 @@ export default function GraphEngine({ viewGraph, centerId, selectedNodeId, onNod
         graphData={sortedGraph}
         nodeLabel={() => ''}
         nodeCanvasObject={drawNode}
+        nodePointerAreaPaint={nodePointerAreaPaint}
         linkCanvasObjectMode={() => 'replace'}
         linkCanvasObject={drawLink}
         onRenderFramePre={renderCanvasPre}
         onRenderFramePost={renderCanvasPost}
-        onNodeClick={onNodeClick}
+        onNodeClick={handleNodeClickWrap}
+        onNodeRightClick={onNodeRightClick}
         onNodeHover={setHoverNode}
         warmupTicks={100}
         cooldownTicks={100}
         d3AlphaDecay={0.02}
         d3VelocityDecay={0.3}
       />
+      
+      {/* Viewport Zoom Controls */}
+      <div className="absolute bottom-10 left-6 flex flex-col gap-2 z-10">
+        <button 
+           onClick={handleZoomToFit} 
+           className="p-2 bg-[#131a28]/80 text-gray-400 hover:text-white border border-white/10 rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.5)] backdrop-blur-md transition-colors"
+           title="Zoom to Fit"
+        >
+           <Maximize size={16} />
+        </button>
+        <button 
+           onClick={() => setIsZoomLocked(prev => !prev)} 
+           className={`p-2 border rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.5)] backdrop-blur-md transition-colors ${
+             isZoomLocked 
+             ? 'bg-amber-500/20 text-amber-400 border-amber-500/30 hover:bg-amber-500/30' 
+             : 'bg-[#131a28]/80 text-gray-400 hover:text-white border-white/10'
+           }`}
+           title={isZoomLocked ? "Unlock Auto-Zoom/Pan" : "Lock Current View"}
+        >
+           {isZoomLocked ? <Lock size={16} /> : <Unlock size={16} />}
+        </button>
+      </div>
     </div>
   );
 }
