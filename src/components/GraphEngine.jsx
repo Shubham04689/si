@@ -20,9 +20,20 @@ const TIER_ORDER = { satellite: 1, peripheral_topic: 1, issue: 1, detail: 1, his
 
 export default function GraphEngine({ viewGraph, centerId, isEditMode, selectedNodeId, onNodeClick, onNodeRightClick, onAddNodeClick, onRemoveNodeClick }) {
   const fgRef = useRef();
+  const requestRef = useRef();
+  const ripplesRef = useRef([]);
   const [hoverNode, setHoverNode] = useState(null);
   const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
   const [isZoomLocked, setIsZoomLocked] = useState(false);
+
+  // Auto layout forces
+  useEffect(() => {
+    if (!fgRef.current) return;
+    const charge = fgRef.current.d3Force('charge');
+    const link = fgRef.current.d3Force('link');
+    if (charge) charge.strength(-600);
+    if (link) link.distance(110);
+  }, []);
 
   const handleZoomToFit = useCallback(() => {
     if (fgRef.current) {
@@ -60,11 +71,14 @@ export default function GraphEngine({ viewGraph, centerId, isEditMode, selectedN
   }, [centerId, viewGraph, isZoomLocked]);
 
   useEffect(() => {
-    if (!fgRef.current) return;
-    const charge = fgRef.current.d3Force('charge');
-    const link = fgRef.current.d3Force('link');
-    if (charge) charge.strength(-350);
-    if (link) link.distance(80);
+    const animateRipples = () => {
+      if (fgRef.current) {
+        fgRef.current.refresh(); // Request a repaint
+      }
+      requestRef.current = requestAnimationFrame(animateRipples);
+    };
+    requestRef.current = requestAnimationFrame(animateRipples);
+    return () => cancelAnimationFrame(requestRef.current);
   }, []);
 
   const bgStars = useMemo(() => {
@@ -102,6 +116,7 @@ export default function GraphEngine({ viewGraph, centerId, isEditMode, selectedN
   }, [hoverNode, sortedGraph.links]);
 
   const drawNode = useCallback((node, ctx, globalScale) => {
+    if (typeof node.x !== 'number' || typeof node.y !== 'number') return;
     ctx.save();
     const isHovered = hoverNode && hoverNode.id === node.id;
     const isSelected = selectedNodeId === node.id;
@@ -120,45 +135,74 @@ export default function GraphEngine({ viewGraph, centerId, isEditMode, selectedN
 
     // Birth animation
     const age = Date.now() - (node.createdAt || 0);
-    const size = age < 500 ? targetSize * (1 - Math.pow(1 - age/500, 3)) : targetSize;
+    const scaleIn = age < 500 ? (1 - Math.pow(1 - age/500, 3)) : 1;
+    let size = targetSize * scaleIn;
 
     let fillColor = 'transparent';
     let strokeColor = '#ffffff';
-    let strokeWidth = 1.5;
-
-    // Colors
+    let strokeWidth = 1.0;
+    
+    // Glassmorphism Center Hub
     if (isCenter) {
-        fillColor = '#806433'; 
-        strokeColor = '#d4af37'; 
+        fillColor = 'rgba(20, 20, 40, 0.7)'; // Frosted dark
         strokeWidth = 2;
     } else if (isHistory) {
         strokeColor = '#a855f7'; 
-        strokeWidth = 1.2;
+        strokeWidth = 1;
     } else if (node.type === 'macro' || node.type === 'central_hub') {
-        strokeColor = '#d4af37'; // gold
+        fillColor = 'transparent'; 
+        strokeColor = 'rgba(255, 255, 255, 0.5)'; 
     } else if (node.type === 'trend' || node.type === 'key_driver') {
-        strokeColor = '#60a5fa'; // blue
+        strokeColor = '#60a5fa'; 
     } else if (node.type === 'risk') {
-        strokeColor = '#ef4444'; // red
+        strokeColor = '#ef4444'; 
     }
 
     if (dimOtherNodes) {
         strokeColor = isHistory ? 'rgba(168, 85, 247, 0.3)' : 'rgba(255, 255, 255, 0.1)';
-        fillColor = isCenter ? 'rgba(128, 100, 51, 0.4)' : 'transparent';
+        fillColor = isCenter ? 'rgba(20, 20, 40, 0.3)' : 'transparent';
     } else if (isHovered || isConnectedHover) {
-       ctx.shadowColor = 'rgba(96,165,250,0.75)';
-       ctx.shadowBlur = 15;
+       if (!isCenter) {
+         size *= 1.3; // scale up on hover
+         ctx.shadowColor = 'rgba(74, 144, 217, 0.8)';
+         ctx.shadowBlur = 12;
+       }
     }
 
     // Node body
     ctx.beginPath();
     ctx.arc(node.x, node.y, size, 0, 2 * Math.PI, false);
+    
+    // Apply center hub gradient stroke
+    if (isCenter && !dimOtherNodes) {
+        const grd = ctx.createLinearGradient(node.x - size, node.y - size, node.x + size, node.y + size);
+        grd.addColorStop(0, '#4A90D9');
+        grd.addColorStop(1, '#9B59B6');
+        strokeColor = grd;
+        
+        // Pulsing glow animation
+        const pulse = Math.sin(Date.now() * 0.002) * 0.5 + 0.5; // 0 to 1
+        ctx.shadowBlur = 20 + (pulse * 30);
+        ctx.shadowColor = `rgba(74, 144, 217, ${0.3 + pulse * 0.3})`;
+    } else if (!dimOtherNodes && (node.type === 'trend' || node.type === 'key_driver' || node.type === 'issue')) {
+        // Inner Ring Gradient Fill
+        const radGrd = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, size);
+        radGrd.addColorStop(0, '#ffffff');
+        radGrd.addColorStop(1, '#4A90D9');
+        fillColor = radGrd;
+        strokeColor = 'transparent';
+    } else if (!dimOtherNodes && (node.type === 'satellite' || node.type === 'peripheral_topic')) {
+        // Outer Ring - hollow
+        fillColor = 'transparent';
+        if (isConnectedHover) strokeColor = '#F5A623'; // amber accent
+    }
+
     if (fillColor !== 'transparent') {
         ctx.fillStyle = fillColor;
         ctx.fill();
     }
     
-    if (strokeWidth > 0) {
+    if (strokeWidth > 0 && strokeColor !== 'transparent') {
         ctx.lineWidth = strokeWidth / globalScale;
         ctx.strokeStyle = strokeColor;
         ctx.stroke();
@@ -215,23 +259,45 @@ export default function GraphEngine({ viewGraph, centerId, isEditMode, selectedN
 
     // Labels
     const label = node.label || node.id;
-    const fontSize = Math.max(10 / globalScale, 2.5);
+    const isOuter = node.type === 'satellite' || node.type === 'peripheral_topic';
     
     if (isCenter && !dimOtherNodes) {
-        ctx.font = `700 ${fontSize}px "Instrument Serif", serif`;
+        ctx.font = `700 ${30/globalScale}px "Inter", "Geist", sans-serif`;
         ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = 'rgba(0,0,0,0.8)';
+        ctx.shadowBlur = 8 / globalScale;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(label, node.x, node.y);
+        ctx.shadowBlur = 0;
     } else if (!dimOtherNodes) {
-        ctx.font = `500 ${fontSize}px "Geist", sans-serif`;
+        const fontSize = Math.max(isOuter ? 9 : 13 / globalScale, 2.5);
+        ctx.font = `${isOuter ? 400 : 600} ${fontSize}px "Inter", "Geist", sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillStyle = isHovered ? 'rgba(255, 255, 255, 0.95)' : 
-                       isSelected ? 'rgba(255, 255, 255, 0.75)' : 
-                       'rgba(255, 255, 255, 0.28)';
+        ctx.fillStyle = (isHovered || isConnectedHover) ? 'rgba(255, 255, 255, 1)' : 
+                        isOuter ? 'rgba(204, 204, 204, 0.75)' : 
+                        'rgba(255, 255, 255, 0.9)';
+        
+        ctx.shadowColor = 'rgba(0,0,0,0.8)';
+        ctx.shadowBlur = 4 / globalScale;
         ctx.fillText(label, node.x, node.y - size - (fontSize * 0.8));
+        ctx.shadowBlur = 0;
     }
+
+    // Update Ripples
+    const now = Date.now();
+    ripplesRef.current = ripplesRef.current.filter(r => now - r.start < 600);
+    ripplesRef.current.forEach(ripple => {
+        if (ripple.id === node.id) {
+           const progress = (now - ripple.start) / 600;
+           ctx.beginPath();
+           ctx.arc(ripple.x, ripple.y, size + (progress * 50 / globalScale), 0, 2 * Math.PI);
+           ctx.strokeStyle = `rgba(255,255,255,${(1 - progress) * 0.5})`;
+           ctx.lineWidth = 1.5 / globalScale;
+           ctx.stroke();
+        }
+    });
 
     // Badges (+ and -)
     if (!dimOtherNodes && node.id) { // Ensure node has data
@@ -304,43 +370,34 @@ export default function GraphEngine({ viewGraph, centerId, isEditMode, selectedN
     let lineWidth = baseWidth / globalScale;
     let opacity = baseOpacity;
 
+    // Connector gradients
+    if (!dimOtherLinks) {
+       const lineGrd = ctx.createLinearGradient(source.x, source.y, target.x, target.y);
+       if (sType === 'macro' || sType === 'central_hub') {
+          lineGrd.addColorStop(0, `rgba(74, 144, 217, ${opacity + (isConnectedHover ? 0.4 : 0.3)})`);
+       } else {
+          lineGrd.addColorStop(0, `rgba(255, 255, 255, ${opacity + (isConnectedHover ? 0.3 : 0)})`);
+       }
+       lineGrd.addColorStop(1, `rgba(255, 255, 255, ${opacity * (isConnectedHover ? 1.0 : 0.5)})`);
+       
+       ctx.strokeStyle = isRed && !isConnectedHover ? `rgba(201, 74, 74, ${opacity + 0.1})` : lineGrd;
+       
+       // Highlighted line instead of particles
+       if (isConnectedHover) {
+           lineWidth = lineWidth * 2.5;
+           ctx.shadowColor = 'rgba(74, 144, 217, 0.8)';
+           ctx.shadowBlur = 8 / globalScale;
+       }
+    } else {
+       ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+    }
+
     ctx.beginPath();
     ctx.moveTo(source.x, source.y);
     ctx.lineTo(target.x, target.y);
-
-    const age = Date.now() - (link.createdAt || 0);
-    if (age < 600) {
-        const dx = target.x - source.x;
-        const dy = target.y - source.y;
-        const len = Math.sqrt(dx*dx + dy*dy);
-        ctx.setLineDash([len, len]);
-        ctx.lineDashOffset = len * (1 - age/600);
-    } else {
-        ctx.setLineDash(link.isHistoryPointer ? [2/globalScale, 4/globalScale] : []);
-    }
-
-    if (link.isHistoryPointer) {
-         opacity = 0.3;
-         ctx.strokeStyle = `rgba(139, 92, 246, ${opacity})`;
-    } else {
-        if (isConnectedHover) {
-            lineWidth = 1.2 / globalScale;
-            opacity = 0.9;
-            ctx.shadowColor = '#60a5fa';
-            ctx.shadowBlur = 4;
-            ctx.strokeStyle = `rgba(96, 165, 250, ${opacity})`;
-        } else if (dimOtherLinks) {
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
-            lineWidth = 0.4 / globalScale;
-        } else {
-            ctx.strokeStyle = isRed ? `rgba(201, 74, 74, ${opacity + 0.05})` : `rgba(255, 255, 255,  ${opacity})`;
-        }
-    }
-    
     ctx.lineWidth = lineWidth;
     ctx.stroke();
     ctx.shadowBlur = 0;
-    ctx.setLineDash([]); 
   }, [hoverNode, hoverLinks]);
 
   const renderCanvasPre = useCallback((ctx, globalScale) => {
@@ -352,22 +409,14 @@ export default function GraphEngine({ viewGraph, centerId, isEditMode, selectedN
       
       if (isNaN(t.x) || isNaN(t.y) || isNaN(b.x) || isNaN(b.y)) return;
       
-      const drift1 = Math.sin(Date.now() * 0.00008) * 30;
-      const drift2 = Math.cos(Date.now() * 0.00008) * 30;
-      
       ctx.save();
       ctx.setTransform(1,0,0,1,0,0); 
       
-      let grd1 = ctx.createRadialGradient(W*0.75 + drift1, H*0.2 - drift2, 0, W*0.75 + drift1, H*0.2 - drift2, 350);
-      grd1.addColorStop(0, 'rgba(168,85,247,0.015)');
-      grd1.addColorStop(1, 'rgba(168,85,247,0)');
+      // 1. New Deep Space Background
+      let grd1 = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, Math.max(W, H)*0.8);
+      grd1.addColorStop(0, '#0a0a1a');
+      grd1.addColorStop(1, '#000005');
       ctx.fillStyle = grd1;
-      ctx.fillRect(0, 0, W, H);
-      
-      let grd2 = ctx.createRadialGradient(W*0.2 - drift1, H*0.8 + drift2, 0, W*0.2 - drift1, H*0.8 + drift2, 400);
-      grd2.addColorStop(0, 'rgba(74,127,212,0.012)');
-      grd2.addColorStop(1, 'rgba(74,127,212,0)');
-      ctx.fillStyle = grd2;
       ctx.fillRect(0, 0, W, H);
 
       bgStars.forEach(s => {
@@ -407,14 +456,19 @@ export default function GraphEngine({ viewGraph, centerId, isEditMode, selectedN
       ctx.arc(0, 0, 3, 0, 2*Math.PI);
       ctx.stroke();
 
+      // 2. Centered Orbital Rings
       if (centerId && sortedGraph.nodes.length) {
           const center = sortedGraph.nodes.find(n => n.id === centerId);
           if (center && center.x !== undefined) {
-             const cgrd = ctx.createRadialGradient(center.x, center.y, 0, center.x, center.y, 300);
-             cgrd.addColorStop(0, 'rgba(201,168,76,0.05)');
-             cgrd.addColorStop(1, 'rgba(201,168,76,0)');
-             ctx.fillStyle = cgrd;
-             ctx.fillRect(center.x - 300, center.y - 300, 600, 600);
+             ctx.beginPath();
+             ctx.arc(center.x, center.y, 110, 0, 2*Math.PI);
+             ctx.moveTo(center.x + 220, center.y); // move to outer ring start
+             ctx.arc(center.x, center.y, 220, 0, 2*Math.PI);
+             ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+             ctx.lineWidth = 1 / globalScale;
+             ctx.setLineDash([4/globalScale, 8/globalScale]);
+             ctx.stroke();
+             ctx.setLineDash([]);
           }
       }
   }, [dimensions, bgStars, centerId, sortedGraph]);

@@ -158,10 +158,33 @@ export default function DataLoader({ onDataLoaded }) {
         )}
         
         {loading && (
-            <div className="mt-8 flex flex-col items-center justify-center gap-4 animate-in fade-in">
-                <div className="w-8 h-8 rounded-full border-2 border-blue-500/30 border-t-blue-400 animate-spin"></div>
-                <div className="text-[#5e7090] font-mono text-[10px] uppercase tracking-widest animate-pulse">
-                    Parsing Schema Manifest...
+            <div className="mt-8 flex flex-col items-center justify-center gap-6 animate-in fade-in zoom-in duration-500">
+                <div className="relative w-16 h-16 flex items-center justify-center">
+                    {/* Blurred core */}
+                    <div className="absolute inset-0 bg-blue-500/30 rounded-full blur-md animate-pulse"></div>
+                    <div className="absolute inset-2 bg-gradient-to-tr from-blue-500 to-purple-500 rounded-full opacity-80"></div>
+                    
+                    {/* Orbiting arc ring */}
+                    <svg className="absolute -inset-2 w-20 h-20 animate-[spin_2s_linear_infinite]" viewBox="0 0 100 100">
+                        <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="2" />
+                        <circle 
+                           cx="50" cy="50" r="46" fill="none" 
+                           stroke="url(#loading-gradient)" 
+                           strokeWidth="2"
+                           strokeDasharray="100 200"
+                           strokeLinecap="round"
+                        />
+                        <defs>
+                           <linearGradient id="loading-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                              <stop offset="0%" stopColor="#4A90D9" />
+                              <stop offset="100%" stopColor="#9B59B6" />
+                           </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                
+                <div className="text-[#5e7090] font-sans text-sm tracking-wide animate-pulse flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span> Exploring Strategic Topology...
                 </div>
             </div>
         )}

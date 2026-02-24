@@ -86,18 +86,16 @@ export default function App() {
          setIsPanelOpen(true);
          break;
        case 'delete':
-         if (window.confirm(`Destroy structural node ${node.label}?`)) {
-           setGlobalGraph(prev => {
-             const newNodes = prev.nodes.filter(n => n.id !== node.id);
-             const newLinks = prev.links.filter(l => 
-                (typeof l.source === 'object' ? l.source.id : l.source) !== node.id && 
-                (typeof l.target === 'object' ? l.target.id : l.target) !== node.id
-             );
-             return { ...prev, nodes: newNodes, links: newLinks };
-           });
-           if (centerId === node.id || selectedNode?.id === node.id) {
-             setIsPanelOpen(false);
-           }
+         setGlobalGraph(prev => {
+           const newNodes = prev.nodes.filter(n => n.id !== node.id);
+           const newLinks = prev.links.filter(l => 
+              (typeof l.source === 'object' ? l.source.id : l.source) !== node.id && 
+              (typeof l.target === 'object' ? l.target.id : l.target) !== node.id
+           );
+           return { ...prev, nodes: newNodes, links: newLinks };
+         });
+         if (centerId === node.id || selectedNode?.id === node.id) {
+           setIsPanelOpen(false);
          }
          break;
     }
@@ -159,19 +157,17 @@ export default function App() {
   }, []);
 
   const handleRemoveNodeQuick = useCallback((node) => {
-      if (window.confirm(`Destroy structural node ${node.label}?`)) {
-           setGlobalGraph(prev => {
-             const newNodes = prev.nodes.filter(n => n.id !== node.id);
-             const newLinks = prev.links.filter(l => 
-                (typeof l.source === 'object' ? l.source.id : l.source) !== node.id && 
-                (typeof l.target === 'object' ? l.target.id : l.target) !== node.id
-             );
-             return { ...prev, nodes: newNodes, links: newLinks };
-           });
-           if (centerId === node.id || selectedNode?.id === node.id) {
-             setIsPanelOpen(false);
-           }
-      }
+       setGlobalGraph(prev => {
+         const newNodes = prev.nodes.filter(n => n.id !== node.id);
+         const newLinks = prev.links.filter(l => 
+            (typeof l.source === 'object' ? l.source.id : l.source) !== node.id && 
+            (typeof l.target === 'object' ? l.target.id : l.target) !== node.id
+         );
+         return { ...prev, nodes: newNodes, links: newLinks };
+       });
+       if (centerId === node.id || selectedNode?.id === node.id) {
+         setIsPanelOpen(false);
+       }
   }, [centerId, selectedNode]);
 
   const handleAddNodeQuick = useCallback((parentNode, event) => {
@@ -318,8 +314,8 @@ Return ONLY a short, punchy 1-4 word label for a NEW logical sub-topic or branch
             onAIGenerate={handleAIGenerateBranch}
           />
 
-          {/* Header UI overlay */}
-          <header className="fixed top-0 left-0 right-0 h-14 bg-[#080c14]/72 backdrop-blur-[20px] backdrop-saturate-150 border-b border-white/5 z-[100] flex justify-between items-center px-5">
+          {/* Header UI overlay - Frosted glass upgrade */}
+          <header className="fixed top-0 left-0 right-0 h-14 bg-[rgba(10,10,20,0.9)] backdrop-blur-[20px] backdrop-saturate-150 border-b border-[rgba(255,255,255,0.08)] z-[100] flex justify-between items-center px-5">
             {/* Left: Wordmark & Title */}
             <div className="flex items-center">
               {/* Monogram */}
@@ -470,6 +466,12 @@ Return ONLY a short, punchy 1-4 word label for a NEW logical sub-topic or branch
               <span>Nodes: <span className="text-gray-300 font-medium tabular-nums">{globalGraph.nodes.length}</span></span>
               <span>Edges: <span className="text-gray-300 font-medium tabular-nums">{globalGraph.links.length}</span></span>
             </div>
+                        {/* Navigation Pill Buttons */}
+              <div className="flex bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.12)] p-1 rounded-full backdrop-blur-md shadow-sm">
+                 <button className="px-5 py-1.5 text-[0.7rem] uppercase tracking-wider font-semibold rounded-full bg-white/10 text-white shadow-sm transition-all">Home</button>
+                 <button className="px-5 py-1.5 text-[0.7rem] uppercase tracking-wider font-semibold rounded-full text-gray-400 hover:text-white hover:bg-[rgba(255,255,255,0.12)] transition-all">History</button>
+                 <button className="px-5 py-1.5 text-[0.7rem] uppercase tracking-wider font-semibold rounded-full text-gray-400 hover:text-white hover:bg-[rgba(255,255,255,0.12)] transition-all flex items-center gap-2">Monitor <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span></button>
+              </div>
             
             <div className="flex items-center gap-4">
               <span className="flex items-center gap-1.5 text-emerald-500/80">
