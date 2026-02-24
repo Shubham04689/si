@@ -5,6 +5,8 @@ import IntelligencePanel from './components/IntelligencePanel';
 import AiCommandCenter from './components/AiCommandCenter';
 import { filterGraph } from './utils/graphFilter';
 import { Share2, Maximize2, Download, Edit3, Sparkles } from 'lucide-react';
+import Tooltip from './components/Tooltip';
+import ContextMenu from './components/ContextMenu';
 
 export default function App() {
   const [globalGraph, setGlobalGraph] = useState(null);
@@ -17,6 +19,7 @@ export default function App() {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isAiCommandCenterOpen, setIsAiCommandCenterOpen] = useState(false);
+  const [contextMenuState, setContextMenuState] = useState({ isOpen: false, x: 0, y: 0, node: null });
 
   const handleDataLoaded = useCallback((json, initialCenterId) => {
     setGlobalGraph(json);
@@ -58,6 +61,44 @@ export default function App() {
         }, 150);
     }
   }, [centerId, globalGraph]);
+
+  const handleNodeRightClick = useCallback((node, event) => {
+    if (!node || !event) return;
+    setContextMenuState({ isOpen: true, x: event.clientX, y: event.clientY, node });
+  }, []);
+
+  const handleContextMenuAction = useCallback((actionId, node) => {
+    switch (actionId) {
+       case 'edit':
+         setSelectedNode(node);
+         setCenterId(node.id);
+         setIsEditMode(true);
+         setIsPanelOpen(true);
+         break;
+       case 'add_child':
+       case 'link_existing':
+         setSelectedNode(node);
+         setCenterId(node.id);
+         setIsEditMode(true);
+         setIsPanelOpen(true);
+         break;
+       case 'delete':
+         if (window.confirm(`Destroy structural node ${node.label}?`)) {
+           setGlobalGraph(prev => {
+             const newNodes = prev.nodes.filter(n => n.id !== node.id);
+             const newLinks = prev.links.filter(l => 
+                (typeof l.source === 'object' ? l.source.id : l.source) !== node.id && 
+                (typeof l.target === 'object' ? l.target.id : l.target) !== node.id
+             );
+             return { ...prev, nodes: newNodes, links: newLinks };
+           });
+           if (centerId === node.id || selectedNode?.id === node.id) {
+             setIsPanelOpen(false);
+           }
+         }
+         break;
+    }
+  }, [centerId, selectedNode]);
 
   // --- Builder Mode Handlers ---
   const handleUpdateNode = useCallback((updatedNode) => {
@@ -147,57 +188,118 @@ export default function App() {
             viewGraph={viewGraph} 
             centerId={centerId} 
             onNodeClick={handleNodeClick} 
+            onNodeRightClick={handleNodeRightClick}
           />
           
+          <ContextMenu 
+            isOpen={contextMenuState.isOpen}
+            x={contextMenuState.x}
+            y={contextMenuState.y}
+            node={contextMenuState.node}
+            onClose={() => setContextMenuState(prev => ({...prev, isOpen: false}))}
+            onAction={handleContextMenuAction}
+          />
+
           {/* Header UI overlay */}
-          <header className="absolute top-0 left-0 w-full p-6 pointer-events-none z-10 flex justify-between items-start">
-              <div>
-                  <h1 className="text-2xl font-bold tracking-tight text-white/90 drop-shadow-md">
-                      {globalGraph.meta?.title || 'Transformation Map'}
-                  </h1>
-                  <p className="text-sm font-medium text-gray-300 mt-1 uppercase tracking-widest">
-                      Interactive Explorer
-                  </p>
+          <header className="fixed top-0 left-0 right-0 h-14 bg-[#080c14]/72 backdrop-blur-[20px] backdrop-saturate-150 border-b border-white/5 z-[100] flex justify-between items-center px-5">
+            {/* Left: Wordmark & Title */}
+            <div className="flex items-center">
+              {/* Monogram */}
+              <div className="w-7 h-7 rounded-lg border border-[#c9a84c]/40 bg-[#c9a84c]/5 flex items-center justify-center font-display text-[#d4af37] text-[0.8rem] leading-none pt-0.5 shadow-[0_0_8px_rgba(201,168,76,0.15)]">
+                SI
               </div>
-              <div className="flex gap-4 pointer-events-auto items-center">
-                 <button
+              
+              {/* Text Wordmark */}
+              <div className="ml-3 flex items-baseline tracking-wide">
+                <span className="font-sans font-light text-white text-[0.95rem]">Strategic</span>
+                <span className="font-display italic font-light text-white text-[1.05rem] ml-1.5">Intelligence</span>
+              </div>
+              
+              <span className="font-mono text-[0.56rem] px-2 py-[2px] border border-white/10 rounded-full text-[#5e7090] ml-3 tracking-widest uppercase">v2.0</span>
+              
+              {/* Separator */}
+              <div className="w-px h-4 bg-white/10 mx-4"></div>
+              
+              {/* Editable Map Title */}
+              <div 
+                contentEditable={true}
+                suppressContentEditableWarning={true}
+                onBlur={(e) => {
+                  if (!globalGraph) return;
+                  setGlobalGraph(prev => ({
+                    ...prev, 
+                    meta: { ...prev.meta, title: e.target.textContent }
+                  }));
+                }}
+                className="font-mono text-[0.65rem] text-[#9ca3af] border-b border-dashed border-white/10 px-1 py-[2px] outline-none min-w-[100px] transition-colors focus:border-white/30 hover:text-white"
+              >
+                {globalGraph.meta?.title || 'Strategic Vision'}
+              </div>
+            </div>
+
+            {/* Right: Actions */}
+            <div className="flex items-center h-full gap-3">
+              {/* Action Group 1 */}
+              <div className="flex items-center gap-2">
+                <Tooltip content="Automated Architecture" shortcut="K" position="bottom" delay={200}>
+                  <button
                     onClick={() => setIsAiCommandCenterOpen(true)}
-                    className="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-full transition-all shadow-lg bg-purple-600/90 hover:bg-purple-500 text-white shadow-purple-500/20"
-                 >
-                   <Sparkles size={16} />
-                   AI Generate
-                 </button>
+                    disabled={isAiCommandCenterOpen}
+                    className="group flex items-center gap-1.5 text-[0.65rem] uppercase tracking-widest font-mono px-3 py-1.5 rounded-lg border border-[#a855f7]/50 text-[#c084fc] bg-[#a855f7]/10 hover:bg-[#a855f7]/20 transition-all shadow-[0_0_12px_rgba(168,85,247,0.15)] active:scale-95 disabled:opacity-45 disabled:pointer-events-none relative overflow-hidden"
+                  >
+                    <Sparkles size={13} className="text-[#a855f7]" />
+                    AI Command Center
+                  </button>
+                </Tooltip>
 
-                 <button
+                <Tooltip content="Edit Network State" shortcut="E" position="bottom" delay={200}>
+                  <button
                     onClick={() => setIsEditMode(!isEditMode)}
-                    className={`flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-full transition-all shadow-lg ${
+                    className={`flex items-center gap-1.5 text-[0.65rem] uppercase tracking-widest font-mono px-3 py-1.5 rounded-lg border transition-all active:scale-95 ${
                       isEditMode 
-                        ? 'bg-amber-500 text-gray-900 shadow-amber-500/20' 
-                        : 'bg-gray-900/50 backdrop-blur border border-gray-700 text-gray-300 hover:bg-gray-800'
+                        ? 'border-[#f59e0b] text-[#f59e0b] bg-[#f59e0b]/10 shadow-[0_0_12px_rgba(245,158,11,0.15)]' 
+                        : 'border-white/10 text-gray-300 hover:text-blue-400 hover:border-blue-500/50 hover:bg-blue-500/10'
                     }`}
-                 >
-                   <Edit3 size={16} />
-                   {isEditMode ? 'Builder Mode: ON' : 'Edit Mode'}
-                 </button>
-
-                 <button
-                    onClick={handleExportMap}
-                    className="p-2.5 bg-gray-900/50 backdrop-blur border border-gray-700 rounded-full hover:bg-gray-800 transition shadow-lg text-gray-300"
-                    title="Export Map JSON"
-                 >
-                   <Download size={18} />
-                 </button>
-
-                 <button className="p-2.5 bg-gray-900/50 backdrop-blur border border-gray-700 rounded-full hover:bg-gray-800 transition shadow-lg text-gray-300">
-                    <Share2 size={18} />
-                 </button>
-                 <button className="p-2.5 bg-gray-900/50 backdrop-blur border border-gray-700 rounded-full hover:bg-gray-800 transition shadow-lg text-gray-300" onClick={() => {
-                     setGlobalGraph(null);
-                     setIsPanelOpen(false);
-                 }}>
-                    <Maximize2 size={18} className="text-gray-300" />
-                 </button>
+                  >
+                    {isEditMode && <span className="w-1.5 h-1.5 rounded-full bg-[#f59e0b] animate-pulse"></span>}
+                    <Edit3 size={13} />
+                    {isEditMode ? 'EDITING' : 'Builder Mode'}
+                  </button>
+                </Tooltip>
               </div>
+
+              {/* Separator */}
+              <div className="w-px h-4 bg-white/10 mx-1"></div>
+
+              {/* Action Group 2 */}
+              <div className="flex items-center gap-1.5">
+                 <Tooltip content="Share Environment" shortcut="S" position="bottom" delay={300}>
+                   <button className="p-1.5 border border-white/10 rounded-lg text-gray-400 hover:text-blue-400 hover:border-blue-500/50 hover:bg-blue-500/10 transition-all active:scale-95">
+                     <Share2 size={14} />
+                   </button>
+                 </Tooltip>
+                 <Tooltip content="Export JSON Graph" shortcut="X" position="bottom" delay={300}>
+                   <button
+                      onClick={handleExportMap}
+                      className="p-1.5 border border-white/10 rounded-lg text-gray-400 hover:text-blue-400 hover:border-blue-500/50 hover:bg-blue-500/10 transition-all active:scale-95"
+                   >
+                     <Download size={14} />
+                   </button>
+                 </Tooltip>
+                 <Tooltip content="Scrub Canvas" shortcut="C" position="bottom" delay={300}>
+                   <button 
+                      className="p-1.5 border border-white/10 rounded-lg text-gray-400 hover:text-red-400 hover:border-red-500/50 hover:bg-red-500/10 transition-all ml-1 active:scale-95" 
+                      onClick={() => {
+                        if(window.confirm('Clear all data from map?')) {
+                          setGlobalGraph(null);
+                          setIsPanelOpen(false);
+                        }
+                      }}>
+                     <Maximize2 size={14} className="rotate-45" />
+                   </button>
+                 </Tooltip>
+              </div>
+            </div>
           </header>
 
           <IntelligencePanel 
@@ -221,6 +323,28 @@ export default function App() {
                handleDataLoaded(newGraph, centerId);
             }}
           />
+
+          {/* Footer / Status Bar */}
+          <footer className="fixed bottom-0 left-0 right-0 h-7 bg-[#080c14]/80 backdrop-blur-[20px] border-t border-white/5 z-40 flex items-center justify-between px-4 font-mono text-[9px] text-[#5e7090] tracking-widest uppercase select-none">
+            <div className="flex items-center gap-4">
+              <span className="flex items-center gap-1.5">
+                <span className={isEditMode ? "w-1.5 h-1.5 rounded-full bg-[#f59e0b] shadow-[0_0_5px_rgba(245,158,11,0.6)]" : "w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_5px_rgba(59,130,246,0.5)]"}></span>
+                {isEditMode ? 'Edit Mode Active' : 'Navigation Mode'}
+              </span>
+              <div className="w-px h-3 bg-white/10"></div>
+              <span>Nodes: <span className="text-gray-300 font-medium tabular-nums">{globalGraph.nodes.length}</span></span>
+              <span>Edges: <span className="text-gray-300 font-medium tabular-nums">{globalGraph.links.length}</span></span>
+            </div>
+            
+            <div className="flex items-center gap-4">
+              <span className="flex items-center gap-1.5 text-emerald-500/80">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                Local DB Connected
+              </span>
+              <div className="w-px h-3 bg-white/10"></div>
+              <span className="text-gray-500">Universal Graph Engine</span>
+            </div>
+          </footer>
         </>
       )}
     </div>

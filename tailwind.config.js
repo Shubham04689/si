@@ -2,10 +2,15 @@
 export default {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
+    fontFamily: {
+      sans: ['Geist', 'sans-serif'],
+      mono: ['"Geist Mono"', 'monospace'],
+      display: ['"Instrument Serif"', 'serif'],
+    },
     extend: {
       colors: {
-        background: "#0a0f1c", // Deep Navy
-        border: "#1f2937",
+        background: "var(--navy)",
+        border: "var(--border)",
       },
     },
   },

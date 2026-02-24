@@ -1,6 +1,18 @@
 import React, { useRef, useState } from 'react';
 import { UploadCloud, FileJson, AlertCircle } from 'lucide-react';
-import { validateMapData } from '../utils/SchemaValidator';
+
+const validateMapData = (data) => {
+  if (!data || typeof data !== 'object') throw new Error('Data must be a JSON object.');
+  if (!Array.isArray(data.nodes) || data.nodes.length === 0) throw new Error('Map must have a "nodes" array with at least one entry.');
+  if (!Array.isArray(data.links)) throw new Error('Map must have a "links" array (can be empty).');
+  const nodeIds = new Set(data.nodes.map(n => n.id));
+  data.links.forEach((l, i) => {
+    const src = typeof l.source === 'object' ? l.source.id : l.source;
+    const tgt = typeof l.target === 'object' ? l.target.id : l.target;
+    if (!nodeIds.has(src)) throw new Error(`Link ${i}: source "${src}" does not match any node ID.`);
+    if (!nodeIds.has(tgt)) throw new Error(`Link ${i}: target "${tgt}" does not match any node ID.`);
+  });
+};
 
 export default function DataLoader({ onDataLoaded }) {
   const fileInputRef = useRef(null);
@@ -30,15 +42,19 @@ export default function DataLoader({ onDataLoaded }) {
             connectionCounts[targetId] = (connectionCounts[targetId] || 0) + 1;
         });
 
-        let initialCenterId = json.nodes[0]?.id;
-        let maxConnections = -1;
+        let initialCenterId = json.nodes.find(n => n.type === 'macro' || n.type === 'central_hub')?.id;
+
+        if (!initialCenterId) {
+          let maxConnections = -1;
+          Object.entries(connectionCounts).forEach(([nodeId, count]) => {
+             if (count > maxConnections) {
+               maxConnections = count;
+               initialCenterId = nodeId;
+             }
+          });
+        }
         
-        Object.entries(connectionCounts).forEach(([nodeId, count]) => {
-           if (count > maxConnections) {
-             maxConnections = count;
-             initialCenterId = nodeId;
-           }
-        });
+        if (!initialCenterId) initialCenterId = json.nodes[0]?.id;
 
         onDataLoaded(json, initialCenterId);
       } catch (err) {
@@ -86,20 +102,28 @@ export default function DataLoader({ onDataLoaded }) {
   };
 
   return (
-    <div className="absolute inset-0 flex items-center justify-center bg-background text-white p-6 z-50">
-      <div className="max-w-md w-full bg-gray-900/80 backdrop-blur-md rounded-2xl border border-gray-800 p-8 shadow-2xl">
-        <div className="text-center mb-8">
-          <div className="mx-auto w-16 h-16 bg-blue-500/20 text-blue-400 rounded-full flex items-center justify-center mb-6">
-            <UploadCloud size={32} />
+    <div className="absolute inset-0 flex items-center justify-center bg-[#080c14] text-white p-6 z-50 overflow-hidden">
+      {/* Background Ambience */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+         <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-[120px] mix-blend-screen opacity-50"></div>
+         <div className="absolute bottom-1/4 right-1/4 w-[600px] h-[600px] bg-purple-600/10 rounded-full blur-[150px] mix-blend-screen opacity-50"></div>
+         <div className="absolute inset-0 bg-[#080c14]/40 backdrop-blur-[100px]"></div>
+      </div>
+
+      <div className="relative max-w-md w-full bg-white/[0.02] backdrop-blur-[40px] rounded-3xl border border-white/5 p-10 shadow-[0_24px_80px_rgba(0,0,0,0.8)] animate-in fade-in zoom-in-95 duration-700">
+        <div className="text-center mb-10">
+          <div className="mx-auto w-20 h-20 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-2xl border border-white/10 flex items-center justify-center mb-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]">
+            <UploadCloud size={32} className="text-blue-400" />
           </div>
-          <h1 className="text-2xl font-light mb-2">Strategic Intelligence</h1>
-          <p className="text-gray-400 text-sm">Upload your JSON transformation map schema to begin exploring data.</p>
+          <h1 className="text-3xl font-display font-light mb-3 tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">Strategic Intelligence</h1>
+          <p className="text-[#5e7090] text-[0.85rem] font-sans tracking-wide leading-relaxed">Upload your JSON transformation map schema to begin exploring data.</p>
         </div>
 
         <div 
           onClick={() => !loading && fileInputRef.current?.click()}
-          className="border-2 border-dashed border-gray-700 hover:border-blue-500/50 hover:bg-gray-800/50 transition-all rounded-xl p-8 text-center cursor-pointer group"
+          className="relative border border-dashed border-white/10 hover:border-blue-500/50 hover:bg-white/[0.02] transition-all duration-300 rounded-2xl p-10 text-center cursor-pointer group overflow-hidden"
         >
+          <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
           <input 
             type="file" 
             ref={fileInputRef} 
@@ -107,34 +131,38 @@ export default function DataLoader({ onDataLoaded }) {
             accept=".json,application/json" 
             className="hidden" 
           />
-          <FileJson className="mx-auto text-gray-500 group-hover:text-blue-400 mb-4 transition-colors" size={40} />
-          <p className="text-gray-300 font-medium">Click to select JSON file</p>
-          <p className="text-gray-500 text-xs mt-2">Strict Schema format required</p>
+          <FileJson className="mx-auto text-[#5e7090] group-hover:text-blue-400 mb-5 transition-colors duration-300 relative z-10" size={36} />
+          <p className="text-gray-300 font-medium tracking-wide relative z-10 group-hover:text-white transition-colors">Select JSON Manifest</p>
+          <p className="text-[#5e7090] text-[10px] font-mono uppercase tracking-widest mt-3 relative z-10">Strict Schema Required</p>
         </div>
 
-        <div className="flex items-center gap-4 my-6">
-            <div className="h-px bg-gray-800 flex-1"></div>
-            <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">OR</span>
-            <div className="h-px bg-gray-800 flex-1"></div>
+        <div className="flex items-center gap-4 my-8">
+            <div className="h-px bg-white/5 flex-1"></div>
+            <span className="text-[10px] text-[#5e7090] font-mono uppercase tracking-widest bg-[#080c14] px-2 rounded">OR</span>
+            <div className="h-px bg-white/5 flex-1"></div>
         </div>
 
         <button 
           onClick={handleCreateBlankMap}
-          className="w-full bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 rounded-xl p-4 font-medium transition-colors flex items-center justify-center gap-2"
+          className="w-full bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 rounded-xl p-4 font-medium transition-all duration-300 flex items-center justify-center gap-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] hover:shadow-[0_0_20px_rgba(59,130,246,0.15)] active:scale-[0.98]"
         >
-          Create Blank Map (Builder Mode)
+          <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
+          Initialize Blank Topology
         </button>
 
         {error && (
-          <div className="mt-6 p-4 bg-red-900/30 border border-red-500/30 rounded-lg flex items-start gap-3 text-red-400 text-sm">
-            <AlertCircle className="shrink-0" size={18} />
-            <p>{error}</p>
+          <div className="mt-8 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3 text-red-400 text-[0.85rem] animate-in fade-in slide-in-from-bottom-2">
+            <AlertCircle className="shrink-0 mt-0.5" size={16} />
+            <p className="leading-relaxed">{error}</p>
           </div>
         )}
         
         {loading && (
-            <div className="mt-6 text-center text-blue-400 text-sm animate-pulse">
-                Processing schema map...
+            <div className="mt-8 flex flex-col items-center justify-center gap-4 animate-in fade-in">
+                <div className="w-8 h-8 rounded-full border-2 border-blue-500/30 border-t-blue-400 animate-spin"></div>
+                <div className="text-[#5e7090] font-mono text-[10px] uppercase tracking-widest animate-pulse">
+                    Parsing Schema Manifest...
+                </div>
             </div>
         )}
       </div>

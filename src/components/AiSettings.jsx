@@ -2,7 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { Settings, X, Server, Key, Box, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
 import { cn } from './IntelligencePanel';
 
+const PROVIDERS = [
+  { id: 'ollama', name: 'Ollama (Local)', url: 'http://localhost:11434/v1', defaultModel: 'llama3' },
+  { id: 'openai', name: 'OpenAI', url: 'https://api.openai.com/v1', defaultModel: 'gpt-4o' },
+  { id: 'groq', name: 'Groq', url: 'https://api.groq.com/openai/v1', defaultModel: 'llama3-8b-8192' },
+  { id: 'mistral', name: 'Mistral', url: 'https://api.mistral.ai/v1', defaultModel: 'mistral-large-latest' },
+  { id: 'gemini', name: 'Google Gemini', url: 'https://generativelanguage.googleapis.com/v1beta/openai/', defaultModel: 'gemini-1.5-flash' },
+  { id: 'custom', name: 'Custom (OpenAI Compatible)', url: '', defaultModel: '' }
+];
+
 export default function AiSettings({ isOpen, onClose }) {
+  const [provider, setProvider] = useState('custom');
   const [endpoint, setEndpoint] = useState('http://localhost:11434/v1');
   const [apiKey, setApiKey] = useState('');
   const [selectedModel, setSelectedModel] = useState('');
@@ -18,17 +28,44 @@ export default function AiSettings({ isOpen, onClose }) {
     const savedKey = localStorage.getItem('ai_api_key');
     const savedModel = localStorage.getItem('ai_model');
     
-    if (savedEndpoint) setEndpoint(savedEndpoint);
+    if (savedEndpoint) {
+        setEndpoint(savedEndpoint);
+        const match = PROVIDERS.find(p => p.url === savedEndpoint);
+        if (match) setProvider(match.id);
+        else setProvider('custom');
+    } else {
+        setProvider('ollama');
+    }
     if (savedKey) setApiKey(savedKey);
     if (savedModel) setSelectedModel(savedModel);
   }, []);
 
-  // Save to local storage on change
-  useEffect(() => {
-    localStorage.setItem('ai_endpoint', endpoint);
-    localStorage.setItem('ai_api_key', apiKey);
-    localStorage.setItem('ai_model', selectedModel);
-  }, [endpoint, apiKey, selectedModel]);
+  const handleProviderChange = (e) => {
+    const newProvId = e.target.value;
+    setProvider(newProvId);
+    
+    const prov = PROVIDERS.find(p => p.id === newProvId);
+    if (prov && prov.id !== 'custom') {
+        setEndpoint(prov.url);
+        // Only override model if empty or changing from a different provider's default
+        // But for simplicity, just set it if present
+        if (prov.defaultModel) {
+             setSelectedModel(prov.defaultModel);
+        }
+    } else if (newProvId === 'custom') {
+        setEndpoint('');
+    }
+  };
+
+  const handleSave = () => {
+    if (endpoint.trim()) localStorage.setItem('ai_endpoint', endpoint.trim());
+    else localStorage.removeItem('ai_endpoint');
+    if (apiKey.trim()) localStorage.setItem('ai_api_key', apiKey.trim());
+    else localStorage.removeItem('ai_api_key');
+    if (selectedModel.trim()) localStorage.setItem('ai_model', selectedModel.trim());
+    else localStorage.removeItem('ai_model');
+    onClose();
+  };
 
   const fetchModels = async () => {
     setIsLoadingModels(true);
@@ -50,22 +87,28 @@ export default function AiSettings({ isOpen, onClose }) {
           headers,
       });
 
-      if (!res.ok) {
-          throw new Error(`Server returned ${res.status}: ${res.statusText}`);
-      }
-
-      const data = await res.json();
-      
-      // Handle standard OpenAI format { data: [{id: 'llama2'}, ...] } 
-      // or raw array format depending on provider quirks
       let fetchedModels = [];
-      if (data && data.data && Array.isArray(data.data)) {
-          fetchedModels = data.data;
-      } else if (Array.isArray(data)) {
-          fetchedModels = data;
-      } else if (data && data.models && Array.isArray(data.models)) {
-          // Ollama specific non-standard sometimes
-          fetchedModels = data.models;
+
+      if (!res.ok) {
+          // Try Ollama native /api/tags endpoint
+          const ollamaBase = baseUrl.replace('/v1', '');
+          const ollamaRes = await fetch(`${ollamaBase}/api/tags`);
+          if (ollamaRes.ok) {
+              const ollamaData = await ollamaRes.json();
+              fetchedModels = (ollamaData.models || []).map(m => ({ id: m.name }));
+          } else {
+              throw new Error(`Server returned ${res.status}: ${res.statusText}`);
+          }
+      } else {
+          const data = await res.json();
+          
+          if (data && data.data && Array.isArray(data.data)) {
+              fetchedModels = data.data;
+          } else if (Array.isArray(data)) {
+              fetchedModels = data;
+          } else if (data && data.models && Array.isArray(data.models)) {
+              fetchedModels = data.models;
+          }
       }
 
       if (fetchedModels.length > 0) {
@@ -112,6 +155,22 @@ export default function AiSettings({ isOpen, onClose }) {
 
           <div className="p-6 space-y-6">
              
+             {/* Provider Selection */}
+             <div>
+                <label className="text-xs font-medium text-gray-400 flex items-center gap-2 mb-2">
+                    <Box className="w-3.5 h-3.5" /> AI Provider
+                </label>
+                <select 
+                    value={provider}
+                    onChange={handleProviderChange}
+                    className="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 text-sm text-gray-200 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none appearance-none"
+                >
+                    {PROVIDERS.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                </select>
+             </div>
+
              {/* Endpoint URL */}
              <div>
                 <label className="text-xs font-medium text-gray-400 flex items-center gap-2 mb-2">
@@ -120,7 +179,10 @@ export default function AiSettings({ isOpen, onClose }) {
                 <input 
                     type="text" 
                     value={endpoint}
-                    onChange={(e) => setEndpoint(e.target.value)}
+                    onChange={(e) => {
+                        setEndpoint(e.target.value);
+                        setProvider('custom');
+                    }}
                     placeholder="http://localhost:11434/v1 for Ollama"
                     className="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 text-sm text-gray-200 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none transition-all"
                 />
@@ -182,7 +244,11 @@ export default function AiSettings({ isOpen, onClose }) {
                        value={selectedModel}
                        onChange={(e) => setSelectedModel(e.target.value)}
                        placeholder="e.g. llama3, mixtral, gpt-4o"
-                       className="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 text-sm text-gray-200 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none transition-all"
+                       className={`w-full bg-gray-950 border rounded-xl p-3 text-sm text-gray-200 focus:ring-1 focus:outline-none transition-all ${
+                         connectionStatus === 'error' 
+                           ? 'border-red-500/40 focus:border-red-500 focus:ring-red-500' 
+                           : 'border-gray-800 focus:border-purple-500 focus:ring-purple-500'
+                       }`}
                    />
                 )}
                 <p className="text-[10px] text-gray-500 mt-1.5 ml-1">Type manually if offline, or click 'Fetch Models'.</p>
@@ -192,7 +258,7 @@ export default function AiSettings({ isOpen, onClose }) {
 
           <div className="px-6 py-4 bg-gray-900/50 border-t border-gray-800 flex justify-end">
              <button 
-                 onClick={onClose}
+                 onClick={handleSave}
                  className="px-6 py-2.5 bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium rounded-xl transition-all shadow-lg"
              >
                  Save & Close

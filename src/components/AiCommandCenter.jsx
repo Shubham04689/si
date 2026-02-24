@@ -1,24 +1,44 @@
-import React, { useState } from 'react';
-import { Sparkles, X, BrainCircuit, Type, Settings, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Sparkles, X, BrainCircuit, Type, Settings, AlertTriangle, GripHorizontal, FileClock, ChevronRight } from 'lucide-react';
 import { cn } from './IntelligencePanel';
 import AiSettings from './AiSettings';
+
+const PRESETS = [
+  "Analyze the impact of Generative AI on the future of healthcare.",
+  "Map the geopolitical risks in the semiconductor supply chain.",
+  "Explore the evolution of autonomous transport over the next decade."
+];
 
 export default function AiCommandCenter({ isOpen, onClose, onMapGenerated }) {
   const [prompt, setPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState("");
-
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [recentPrompts, setRecentPrompts] = useState([]);
+
+  useEffect(() => {
+    if (isOpen) {
+      const saved = localStorage.getItem('recent_prompts');
+      if (saved) setRecentPrompts(JSON.parse(saved));
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
+  const saveRecentPrompt = (text) => {
+    let recent = [text, ...recentPrompts.filter(p => p !== text)].slice(0, 5);
+    setRecentPrompts(recent);
+    localStorage.setItem('recent_prompts', JSON.stringify(recent));
+  };
+
   const handleGenerate = async () => {
-    if (!prompt.trim()) return;
+    if (!prompt.trim() || isGenerating) return;
     
     setErrorMsg('');
     setIsGenerating(true);
     setGenerationStep("Initializing Universal API Connection...");
+    saveRecentPrompt(prompt);
 
     try {
         const endpoint = localStorage.getItem('ai_endpoint') || 'http://localhost:11434/v1';
@@ -29,7 +49,6 @@ export default function AiCommandCenter({ isOpen, onClose, onMapGenerated }) {
         const headers = { 'Content-Type': 'application/json' };
         if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
 
-        // Schema instruction
         const systemPrompt = `You are a highly advanced Intelligence Analyst. Your task is to output a Strategic Intelligence Map strictly in JSON format based on the user's prompt. Do NOT wrap the JSON in markdown blocks (like \`\`\`json). Just output raw parsable JSON.
         
 The JSON exactly match this schema:
@@ -78,10 +97,7 @@ CRITICAL RULES:
         const data = await res.json();
         const content = data.choices[0].message.content;
 
-        // Clean up markdown markers if the LLM ignored our "no markdown" instruction
         let cleanContent = content.replace(/```json\n?/g, '').replace(/```/g, '').trim();
-        
-        // Robust JSON extraction: Find first { and last }
         const firstBrace = cleanContent.indexOf('{');
         const lastBrace = cleanContent.lastIndexOf('}');
         
@@ -90,15 +106,12 @@ CRITICAL RULES:
         }
         
         cleanContent = cleanContent.substring(firstBrace, lastBrace + 1);
-        
         const generatedMap = JSON.parse(cleanContent);
         
-        // Validation: Verify it has nodes and links
         if (!generatedMap.nodes || !generatedMap.links || !Array.isArray(generatedMap.nodes)) {
             throw new Error("Model failed to return valid graph schema.");
         }
 
-        // Auto-detect the center (should be the 'macro' type according to prompt)
         let centerId = generatedMap.nodes.find(n => n.type === 'macro')?.id;
         if (!centerId) centerId = generatedMap.nodes[0].id; // fallback
 
@@ -115,97 +128,153 @@ CRITICAL RULES:
     }
   };
 
+  const estimatedNodes = Math.max(5, Math.min(30, Math.floor(prompt.length / 50)));
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-gray-950/80 backdrop-blur-md transition-all duration-300">
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-[#080c14]/80 backdrop-blur-[6px] transition-all duration-300 animate-in fade-in">
       
       {/* Decorative Background Elements */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-600/20 rounded-full blur-[120px]"></div>
-         <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-[150px]"></div>
+         <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] bg-[#a855f7]/10 rounded-full blur-[120px] mix-blend-screen"></div>
+         <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-[#3b82f6]/10 rounded-full blur-[150px] mix-blend-screen"></div>
       </div>
 
       <div className={cn(
-          "relative w-full max-w-4xl bg-gray-900 border shadow-2xl overflow-hidden transition-all duration-500 rounded-3xl",
-          isGenerating ? "border-purple-500/50 shadow-purple-500/10" : "border-gray-800"
+          "relative w-full max-w-[900px] bg-[#0d1420]/95 backdrop-blur-[40px] border shadow-2xl overflow-hidden transition-all duration-500 rounded-2xl flex animate-in zoom-in-[0.98] slide-in-from-bottom-4 ease-[cubic-bezier(0.16,1,0.3,1)]",
+          isGenerating ? "border-[#a855f7]/40 shadow-[0_0_40px_rgba(168,85,247,0.15)] ring-1 ring-[#a855f7]/20" : "border-white/10 shadow-[0_24px_80px_rgba(0,0,0,0.6)]"
       )}>
           
-        {/* Header */}
-        <div className="flex items-center justify-between px-8 py-6 border-b border-gray-800 bg-gray-900/50">
-           <div className="flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-br from-purple-500/20 to-blue-500/20 rounded-xl border border-purple-500/30">
-                 <BrainCircuit className="text-purple-400 w-6 h-6" />
-              </div>
-              <div>
-                <h2 className="text-xl font-medium text-white tracking-tight">AI Command Center</h2>
-                <p className="text-sm text-gray-400">Generate complex strategic maps from long-form prompts</p>
-              </div>
-           </div>
-           
-           {!isGenerating && (
-             <div className="flex items-center gap-2">
+        {/* Left Column: Recent & Presets */}
+        <div className="w-64 border-r border-white/5 bg-black/20 hidden md:flex flex-col p-6">
+           <h3 className="text-[10px] uppercase tracking-widest font-mono text-[#5e7090] mb-4 flex items-center gap-2">
+             <FileClock size={12}/> Recent Syntheses
+           </h3>
+           <div className="space-y-2 flex-1 overflow-y-auto pr-1 custom-scrollbar">
+             {recentPrompts.length === 0 ? (
+               <p className="text-xs text-gray-600 italic">No recent prompts.</p>
+             ) : (
+               recentPrompts.map((p, i) => (
                  <button 
-                    onClick={() => setIsSettingsOpen(true)} 
-                    className="p-2 text-gray-400 hover:text-purple-400 hover:bg-purple-500/10 rounded-xl transition-colors shrink-0"
-                    title="AI Provider Settings"
+                   key={i} 
+                   onClick={() => setPrompt(p)}
+                   className="w-full text-left p-2.5 rounded-lg border border-transparent hover:border-white/5 hover:bg-white/[0.02] transition-colors group"
                  >
-                   <Settings className="w-5 h-5" />
+                   <p className="text-xs text-gray-400 line-clamp-3 leading-relaxed group-hover:text-gray-300 transition-colors">{p}</p>
                  </button>
-                 <div className="w-px h-6 bg-gray-800 mx-1"></div>
-                 <button onClick={onClose} className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-xl transition-colors shrink-0">
-                   <X className="w-5 h-5" />
+               ))
+             )}
+           </div>
+
+           <div className="mt-6 pt-6 border-t border-white/5">
+             <h3 className="text-[10px] uppercase tracking-widest font-mono text-[#5e7090] mb-4">Preset Templates</h3>
+             <div className="space-y-2">
+               {PRESETS.map((preset, i) => (
+                 <button 
+                   key={i} 
+                   onClick={() => setPrompt(preset)}
+                   className="w-full flex items-start gap-2 text-left p-2 rounded-lg hover:bg-white/[0.03] transition-colors"
+                 >
+                   <ChevronRight size={12} className="text-[#a855f7] mt-0.5 shrink-0" />
+                   <p className="text-[11px] text-gray-400 leading-snug">{preset}</p>
                  </button>
+               ))}
              </div>
-           )}
+           </div>
         </div>
 
-        {/* Content Area */}
-        <div className="p-8">
-            {isGenerating ? (
-                <div className="flex flex-col items-center justify-center py-20 px-10 text-center">
-                    <div className="relative mb-8">
-                        {/* Fake Skeleton Graph Pulses */}
-                        <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full animate-pulse"></div>
-                        <BrainCircuit className="w-16 h-16 text-purple-400 animate-bounce" />
-                    </div>
-                    <h3 className="text-2xl font-light text-white mb-2 tracking-wide">Synthesizing Network</h3>
-                    <p className="text-purple-300 font-mono text-sm animate-pulse">{generationStep}</p>
+        {/* Right Column: Main Editor */}
+        <div className="flex-1 flex flex-col relative overflow-hidden">
+          
+          {/* Header */}
+          <div className="flex items-center justify-between px-8 py-5 border-b border-white/5 bg-white/[0.01]">
+             <div className="flex items-center gap-3">
+                <div className="w-8 h-8 flex items-center justify-center bg-[#a855f7]/10 rounded-lg border border-[#a855f7]/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] cursor-move">
+                   <BrainCircuit className="text-[#c084fc] w-4 h-4" />
                 </div>
-            ) : (
-                <div className="space-y-6">
-                    <div>
-                        <div className="flex justify-between items-end mb-3">
-                            <label className="text-sm font-medium text-gray-300 flex items-center gap-2">
-                                <Type className="w-4 h-4 text-purple-400" /> Research Prompt
-                            </label>
-                            {errorMsg && (
-                                <span className="text-xs text-red-400 flex items-center gap-1 bg-red-500/10 px-2 py-1 rounded">
-                                    <AlertTriangle className="w-3 h-3" /> {errorMsg}
-                                </span>
-                            )}
-                        </div>
+                <div>
+                  <h2 className="text-[1.1rem] font-medium text-white tracking-wide font-display">Command Center</h2>
+                  <p className="text-xs text-[#9ca3af] font-sans">Automated topological network generation</p>
+                </div>
+             </div>
+             
+             {!isGenerating && (
+               <div className="flex items-center gap-1.5">
+                   <button 
+                      onClick={() => setIsSettingsOpen(true)} 
+                      className="p-1.5 text-gray-400 hover:text-[#c084fc] hover:bg-[#a855f7]/10 rounded-lg transition-colors border border-transparent hover:border-[#a855f7]/20"
+                      title="AI Provider Settings"
+                   >
+                     <Settings className="w-4 h-4" />
+                   </button>
+                   <div className="w-px h-5 bg-white/10 mx-1"></div>
+                   <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 hover:border-red-500/20 rounded-lg transition-colors border border-transparent">
+                     <X className="w-5 h-5" />
+                   </button>
+               </div>
+             )}
+          </div>
+
+          {/* Editor Content Area */}
+          <div className="p-8 flex-1 flex flex-col">
+              {isGenerating ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center animate-in fade-in duration-500">
+                      <div className="relative mb-8 w-24 h-24 flex items-center justify-center">
+                          <div className="absolute inset-0 border border-[#a855f7]/30 rounded-full animate-[spin_4s_linear_infinite]"></div>
+                          <div className="absolute inset-2 border-t border-b border-[#c084fc]/50 rounded-full animate-[spin_2s_linear_infinite_reverse]"></div>
+                          <div className="absolute inset-4 bg-[#a855f7]/10 rounded-full blur-md animate-pulse"></div>
+                          <BrainCircuit className="w-8 h-8 text-[#c084fc]" />
+                      </div>
+                      <h3 className="text-[1.2rem] font-display text-white mb-2 tracking-wide">Synthesizing Topology...</h3>
+                      <p className="text-[#c084fc] font-mono text-[11px] uppercase tracking-widest max-w-[300px] truncate animate-pulse">{generationStep}</p>
+                      
+                      <div className="mt-8 w-64 h-1 bg-white/5 rounded-full overflow-hidden">
+                         <div className="h-full bg-gradient-to-r from-[#a855f7] to-[#60a5fa] w-1/2 animate-[progress_1s_ease-in-out_infinite_alternate] rounded-full"></div>
+                      </div>
+                  </div>
+              ) : (
+                  <div className="flex flex-col h-full animate-in fade-in">
+                      <div className="flex justify-between items-end mb-3">
+                          <label className="text-[10px] uppercase font-mono tracking-widest text-[#5e7090] flex items-center gap-2">
+                              <Type className="w-3.5 h-3.5 text-[#c084fc]" /> Seed Prompt
+                          </label>
+                          {errorMsg && (
+                              <span className="text-[10px] text-red-400 flex items-center gap-1.5 bg-red-500/10 border border-red-500/20 px-2 py-1 rounded">
+                                  <AlertTriangle className="w-3 h-3" /> {errorMsg}
+                              </span>
+                          )}
+                      </div>
+                      <div className="relative flex-1 min-h-[220px]">
                         <textarea 
                             value={prompt}
                             onChange={(e) => setPrompt(e.target.value)}
-                            placeholder="Paste your comprehensive research prompt or document text here. The AI will autonomously build a massive strategic map identifying core themes, trends, and peripheral issues based on this context..."
+                            placeholder="Enter a strategic objective, analyze a complex topic, or paste an article..."
                             className={cn(
-                                "w-full h-64 bg-gray-950/50 border rounded-2xl p-6 text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-1 resize-none transition-all text-base leading-relaxed",
-                                errorMsg ? "border-red-500/50 focus:border-red-500 focus:ring-red-500" : "border-gray-800 focus:border-purple-500/50 focus:ring-purple-500/50"
+                                "absolute inset-0 w-full h-full bg-[#080c14]/50 border border-white/5 rounded-xl p-5 text-gray-200 placeholder-[#5e7090] resize-none transition-all text-[0.95rem] leading-[1.8] font-sans shadow-[inset_0_2px_10px_rgba(0,0,0,0.2)]",
+                                "focus:outline-none focus:border-[#a855f7]/40 focus:ring-1 focus:ring-[#a855f7]/30",
+                                errorMsg && "border-red-500/50 focus:border-red-500"
                             )}
                         />
-                    </div>
-                    
-                    <div className="flex justify-end pt-2">
-                        <button 
-                            onClick={handleGenerate}
-                            disabled={!prompt.trim()}
-                            className="group flex items-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-800 disabled:text-gray-500 text-white px-8 py-4 rounded-xl font-medium transition-all shadow-lg hover:shadow-purple-500/25"
-                        >
-                            <Sparkles className="w-5 h-5 group-disabled:opacity-50" />
-                            Generate Full Strategy Map
-                        </button>
-                    </div>
-                </div>
-            )}
+                      </div>
+                      
+                      {/* Footer Actions */}
+                      <div className="flex items-center justify-between pt-5 mt-auto">
+                          <div className="flex items-center gap-4 text-[#5e7090] font-mono text-[10px] uppercase tracking-wider">
+                             <span>{prompt.length} / 5000 chars</span>
+                             <span className="w-1 h-1 rounded-full bg-white/10"></span>
+                             <span>~{estimatedNodes} Nodes</span>
+                          </div>
+                          <button 
+                              onClick={handleGenerate}
+                              disabled={!prompt.trim()}
+                              className="group flex items-center gap-2 bg-[#a855f7] hover:bg-[#9333ea] disabled:bg-white/5 disabled:text-[#5e7090] text-white px-5 py-2.5 rounded-lg font-medium text-[0.8rem] transition-all shadow-[0_0_15px_rgba(168,85,247,0.25)] hover:shadow-[0_0_20px_rgba(168,85,247,0.4)] disabled:shadow-none active:scale-95"
+                          >
+                              <Sparkles className="w-4 h-4" />
+                              Construct Map
+                          </button>
+                      </div>
+                  </div>
+              )}
+          </div>
         </div>
       </div>
       
