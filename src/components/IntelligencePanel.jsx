@@ -224,16 +224,16 @@ You must return a raw JSON object with exactly these keys:
   return (
     <div 
       className={cn(
-          "fixed top-14 right-0 h-[calc(100vh-56px)] bg-[#080c14]/80 backdrop-blur-[30px] backdrop-saturate-150 border-l border-white/5 shadow-2xl flex flex-col z-40 transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]",
+          "fixed top-14 right-0 h-[calc(100vh-56px)] bg-[#080c14]/95 md:bg-[#080c14]/80 backdrop-blur-[30px] backdrop-saturate-150 border-l border-white/5 shadow-2xl flex flex-col z-40 transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]",
           isOpen ? "translate-x-0" : "translate-x-[110%]"
       )}
-      style={{ width: isCollapsed ? 64 : panelWidth }}
+      style={{ width: isCollapsed ? 64 : (window.innerWidth < 768 ? '100vw' : panelWidth) }}
     >
       
-      {/* Drag Handle */}
+      {/* Drag Handle - Hidden on mobile */}
       {!isCollapsed && (
         <div 
-          className="absolute top-0 left-0 w-2.5 h-full -ml-[1px] cursor-col-resize hover:bg-blue-500/20 active:bg-blue-500/40 transition-colors z-50 flex items-center justify-center group"
+          className="absolute top-0 left-0 w-2.5 h-full -ml-[1px] cursor-col-resize hover:bg-blue-500/20 active:bg-blue-500/40 transition-colors z-50 items-center justify-center group hidden md:flex"
           onMouseDown={handleMouseDownResize}
         >
            <div className="h-8 w-0.5 bg-white/10 group-hover:bg-blue-400 rounded-full transition-colors"></div>
@@ -268,19 +268,19 @@ You must return a raw JSON object with exactly these keys:
       {!isCollapsed && node && (
         <>
           {/* Header Area */}
-          <div className="px-6 pt-6 pb-4 border-b border-white/5 flex-shrink-0">
+          <div className="px-4 md:px-6 pt-4 md:pt-6 pb-3 md:pb-4 border-b border-white/5 flex-shrink-0">
             {/* Breadcrumb */}
-            <div className="flex items-center gap-1.5 text-[0.6rem] font-mono text-gray-500 uppercase tracking-widest mb-4">
+            <div className="flex items-center gap-1.5 text-[0.55rem] md:text-[0.6rem] font-mono text-gray-500 uppercase tracking-widest mb-3 md:mb-4">
               <span>Map Core</span>
-              <ChevronRight size={10} />
+              <ChevronRight size={9} className="md:w-[10px] md:h-[10px]" />
               <span>{node.type || 'Topic'}</span>
-              <ChevronRight size={10} />
-              <span className="text-gray-400 truncate max-w-[150px]">{node.label}</span>
+              <ChevronRight size={9} className="md:w-[10px] md:h-[10px]" />
+              <span className="text-gray-400 truncate max-w-[100px] md:max-w-[150px]">{node.label}</span>
             </div>
 
             <div className="flex items-start justify-between">
-              <div className="flex-1 pr-4">
-                <span className={cn("inline-flex items-center px-2 py-0.5 rounded shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] border text-[0.6rem] font-mono uppercase tracking-widest mb-3", getTypeColor(node.type))}>
+              <div className="flex-1 pr-2 md:pr-4">
+                <span className={cn("inline-flex items-center px-2 py-0.5 rounded shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] border text-[0.55rem] md:text-[0.6rem] font-mono uppercase tracking-widest mb-2 md:mb-3", getTypeColor(node.type))}>
                   <TypeDot type={node.type} />
                   {node.viewType === 'history' ? 'Historical Context' : node.type?.replace(/_/g, ' ') || 'Topic'}
                   <span className="ml-2 pl-2 border-l border-current opacity-60">Lvl {node.group || 1}</span>
@@ -291,20 +291,20 @@ You must return a raw JSON object with exactly these keys:
                       type="text" 
                       value={editForm.label}
                       onChange={(e) => setEditForm({...editForm, label: e.target.value})}
-                      className="w-full bg-[#131a28] border border-white/10 rounded p-2 text-2xl font-light text-white mb-2 font-display focus:border-amber-500/50 outline-none"
+                      className="w-full bg-[#131a28] border border-white/10 rounded p-2 text-xl md:text-2xl font-light text-white mb-2 font-display focus:border-amber-500/50 outline-none"
                     />
                 ) : (
-                    <h2 className="text-3xl font-light text-white leading-tight font-display tracking-wide">{node.label}</h2>
+                    <h2 className="text-2xl md:text-3xl font-light text-white leading-tight font-display tracking-wide">{node.label}</h2>
                 )}
               </div>
               
-              <div className="flex items-center gap-1.5 flex-shrink-0 pl-2">
+              <div className="flex items-center gap-1 md:gap-1.5 flex-shrink-0 pl-1 md:pl-2">
                 <button 
                   onClick={() => setIsCollapsed(true)}
-                  className="p-1.5 text-gray-400 hover:text-white bg-white/5 border border-white/5 hover:bg-white/10 rounded-lg transition-all"
+                  className="p-1.5 text-gray-400 hover:text-white bg-white/5 border border-white/5 hover:bg-white/10 rounded-lg transition-all hidden md:block"
                   title="Collapse Panel"
                 >
-                  <Minimize2 size={16} />
+                  <Minimize2 size={15} className="md:w-4 md:h-4" />
                 </button>
                 {isEditMode && (
                   <button 
@@ -314,26 +314,26 @@ You must return a raw JSON object with exactly these keys:
                     }`}
                     title={isEditingContent ? "Save Changes" : "Edit Details"}
                   >
-                    {isEditingContent ? <Save size={16} /> : <Edit2 size={16} />}
+                    {isEditingContent ? <Save size={15} className="md:w-4 md:h-4" /> : <Edit2 size={15} className="md:w-4 md:h-4" />}
                   </button>
                 )}
                 <button 
                   onClick={onClose}
-                  className="p-1.5 text-gray-400 hover:text-red-400 bg-white/5 border border-white/5 hover:bg-red-500/10 hover:border-red-500/20 rounded-lg transition-all ml-1"
+                  className="p-1.5 text-gray-400 hover:text-red-400 bg-white/5 border border-white/5 hover:bg-red-500/10 hover:border-red-500/20 rounded-lg transition-all ml-0.5 md:ml-1"
                 >
-                  <X size={16} />
+                  <X size={15} className="md:w-4 md:h-4" />
                 </button>
               </div>
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-6 mt-6 border-b border-white/5 relative">
+            <div className="flex gap-4 md:gap-6 mt-4 md:mt-6 border-b border-white/5 relative overflow-x-auto">
               {['Overview', 'Network', ...(isEditMode ? ['Builder'] : [])].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   className={cn(
-                    "pb-3 text-xs font-mono uppercase tracking-widest transition-colors relative",
+                    "pb-2 md:pb-3 text-[0.65rem] md:text-xs font-mono uppercase tracking-widest transition-colors relative whitespace-nowrap",
                     activeTab === tab ? "text-blue-400" : "text-gray-500 hover:text-gray-300"
                   )}
                 >
@@ -350,7 +350,7 @@ You must return a raw JSON object with exactly these keys:
           <div 
             ref={scrollRef}
             onScroll={handleScroll}
-            className="flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-8 pb-20 custom-scrollbar"
+            className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 space-y-6 md:space-y-8 pb-16 md:pb-20 custom-scrollbar"
           >
             
             {activeTab === 'Overview' && (

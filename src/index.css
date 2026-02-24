@@ -115,6 +115,8 @@
     margin: 0;
     overflow: hidden;
     font-family: var(--font-sans);
+    -webkit-tap-highlight-color: transparent;
+    touch-action: pan-x pan-y;
   }
 
   body::before {
@@ -131,6 +133,47 @@
     outline: 2px solid rgba(201,168,76,0.65); 
     outline-offset: 2px; 
     border-radius: inherit; 
+  }
+
+  /* Custom scrollbar for webkit browsers */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 3px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  /* Mobile optimizations */
+  @media (max-width: 768px) {
+    /* Improve touch targets */
+    button, a, [role="button"] {
+      min-height: 44px;
+      min-width: 44px;
+    }
+
+    /* Prevent text selection on touch */
+    * {
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    /* Allow text selection in inputs and content areas */
+    input, textarea, [contenteditable="true"], .selectable {
+      -webkit-user-select: text;
+      user-select: text;
+    }
   }
 }
 

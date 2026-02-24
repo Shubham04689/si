@@ -585,24 +585,24 @@ export default function GraphEngine({ viewGraph, centerId, isEditMode, selectedN
       />
       
       {/* Viewport Zoom Controls */}
-      <div className="absolute bottom-10 left-6 flex flex-col gap-2 z-10">
+      <div className="absolute bottom-12 md:bottom-10 left-3 md:left-6 flex flex-col gap-2 z-10">
         <button 
            onClick={handleZoomToFit} 
-           className="p-2 bg-[#131a28]/80 text-gray-400 hover:text-white border border-white/10 rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.5)] backdrop-blur-md transition-colors"
+           className="p-2 md:p-2 bg-[#131a28]/80 text-gray-400 hover:text-white border border-white/10 rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.5)] backdrop-blur-md transition-colors active:scale-95"
            title="Zoom to Fit"
         >
-           <Maximize size={16} />
+           <Maximize size={18} className="md:w-4 md:h-4" />
         </button>
         <button 
            onClick={() => setIsZoomLocked(prev => !prev)} 
-           className={`p-2 border rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.5)] backdrop-blur-md transition-colors ${
+           className={`p-2 md:p-2 border rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.5)] backdrop-blur-md transition-colors active:scale-95 ${
              isZoomLocked 
              ? 'bg-amber-500/20 text-amber-400 border-amber-500/30 hover:bg-amber-500/30' 
              : 'bg-[#131a28]/80 text-gray-400 hover:text-white border-white/10'
            }`}
            title={isZoomLocked ? "Unlock Auto-Zoom/Pan" : "Lock Current View"}
         >
-           {isZoomLocked ? <Lock size={16} /> : <Unlock size={16} />}
+           {isZoomLocked ? <Lock size={18} className="md:w-4 md:h-4" /> : <Unlock size={18} className="md:w-4 md:h-4" />}
         </button>
       </div>
     </div>

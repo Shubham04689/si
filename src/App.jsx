@@ -4,11 +4,12 @@ import GraphEngine from './components/GraphEngine';
 import IntelligencePanel from './components/IntelligencePanel';
 import AiCommandCenter from './components/AiCommandCenter';
 import { filterGraph } from './utils/graphFilter';
-import { Share2, Maximize2, Download, Edit3, Sparkles, PanelRight } from 'lucide-react';
+import { Share2, Maximize2, Download, Edit3, Sparkles, PanelRight, FileText } from 'lucide-react';
 import Tooltip from './components/Tooltip';
 import ContextMenu from './components/ContextMenu';
 import AddNodeDialog from './components/AddNodeDialog';
 import { generateCompletion } from './utils/aiEngine';
+import { generatePDFReport } from './utils/exportUtils';
 
 export default function App() {
   const [globalGraph, setGlobalGraph] = useState(null);
@@ -278,6 +279,16 @@ Return ONLY a short, punchy 1-4 word label for a NEW logical sub-topic or branch
     downloadAnchorNode.remove();
   };
 
+  const handleExportPDF = () => {
+    if (!globalGraph) return;
+    try {
+       generatePDFReport(globalGraph);
+    } catch (err) {
+       console.error("PDF Export failed:", err);
+       alert("Failed to generate PDF. Make sure the graph data is valid.");
+    }
+  };
+
   return (
     <div className="w-screen h-screen bg-background relative overflow-hidden font-sans text-white">
       {!globalGraph ? (
@@ -315,26 +326,26 @@ Return ONLY a short, punchy 1-4 word label for a NEW logical sub-topic or branch
           />
 
           {/* Header UI overlay - Frosted glass upgrade */}
-          <header className="fixed top-0 left-0 right-0 h-14 bg-[rgba(10,10,20,0.9)] backdrop-blur-[20px] backdrop-saturate-150 border-b border-[rgba(255,255,255,0.08)] z-[100] flex justify-between items-center px-5">
+          <header className="fixed top-0 left-0 right-0 h-14 bg-[rgba(10,10,20,0.9)] backdrop-blur-[20px] backdrop-saturate-150 border-b border-[rgba(255,255,255,0.08)] z-[100] flex justify-between items-center px-3 md:px-5">
             {/* Left: Wordmark & Title */}
-            <div className="flex items-center">
+            <div className="flex items-center overflow-hidden">
               {/* Monogram */}
-              <div className="w-7 h-7 rounded-lg border border-[#c9a84c]/40 bg-[#c9a84c]/5 flex items-center justify-center font-display text-[#d4af37] text-[0.8rem] leading-none pt-0.5 shadow-[0_0_8px_rgba(201,168,76,0.15)]">
+              <div className="w-6 h-6 md:w-7 md:h-7 rounded-lg border border-[#c9a84c]/40 bg-[#c9a84c]/5 flex items-center justify-center font-display text-[#d4af37] text-[0.7rem] md:text-[0.8rem] leading-none pt-0.5 shadow-[0_0_8px_rgba(201,168,76,0.15)] flex-shrink-0">
                 SI
               </div>
               
-              {/* Text Wordmark */}
-              <div className="ml-3 flex items-baseline tracking-wide">
-                <span className="font-sans font-light text-white text-[0.95rem]">Strategic</span>
-                <span className="font-display italic font-light text-white text-[1.05rem] ml-1.5">Intelligence</span>
+              {/* Text Wordmark - Hidden on small screens */}
+              <div className="ml-2 md:ml-3 hidden sm:flex items-baseline tracking-wide">
+                <span className="font-sans font-light text-white text-[0.85rem] md:text-[0.95rem]">Strategic</span>
+                <span className="font-display italic font-light text-white text-[0.95rem] md:text-[1.05rem] ml-1 md:ml-1.5">Intelligence</span>
               </div>
               
-              <span className="font-mono text-[0.56rem] px-2 py-[2px] border border-white/10 rounded-full text-[#5e7090] ml-3 tracking-widest uppercase">v2.0</span>
+              <span className="font-mono text-[0.5rem] md:text-[0.56rem] px-1.5 md:px-2 py-[2px] border border-white/10 rounded-full text-[#5e7090] ml-2 md:ml-3 tracking-widest uppercase flex-shrink-0">v2.0</span>
               
-              {/* Separator */}
-              <div className="w-px h-4 bg-white/10 mx-4"></div>
+              {/* Separator - Hidden on mobile */}
+              <div className="w-px h-4 bg-white/10 mx-2 md:mx-4 hidden md:block"></div>
               
-              {/* Editable Map Title */}
+              {/* Editable Map Title - Hidden on mobile */}
               <div 
                 contentEditable={true}
                 suppressContentEditableWarning={true}
@@ -345,48 +356,50 @@ Return ONLY a short, punchy 1-4 word label for a NEW logical sub-topic or branch
                     meta: { ...prev.meta, title: e.target.textContent }
                   }));
                 }}
-                className="font-mono text-[0.65rem] text-[#9ca3af] border-b border-dashed border-white/10 px-1 py-[2px] outline-none min-w-[100px] transition-colors focus:border-white/30 hover:text-white"
+                className="font-mono text-[0.6rem] md:text-[0.65rem] text-[#9ca3af] border-b border-dashed border-white/10 px-1 py-[2px] outline-none min-w-[80px] md:min-w-[100px] transition-colors focus:border-white/30 hover:text-white hidden md:block truncate max-w-[150px]"
               >
                 {globalGraph.meta?.title || 'Strategic Vision'}
               </div>
             </div>
 
             {/* Right: Actions */}
-            <div className="flex items-center h-full gap-3">
-              {/* Action Group 1 */}
-              <div className="flex items-center gap-2">
+            <div className="flex items-center h-full gap-1.5 md:gap-3">
+              {/* Action Group 1 - Responsive */}
+              <div className="flex items-center gap-1 md:gap-2">
                 <Tooltip content="Automated Architecture" shortcut="K" position="bottom" delay={200}>
                   <button
                     onClick={() => setIsAiCommandCenterOpen(true)}
                     disabled={isAiCommandCenterOpen}
-                    className="group flex items-center gap-1.5 text-[0.65rem] uppercase tracking-widest font-mono px-3 py-1.5 rounded-lg border border-[#a855f7]/50 text-[#c084fc] bg-[#a855f7]/10 hover:bg-[#a855f7]/20 transition-all shadow-[0_0_12px_rgba(168,85,247,0.15)] active:scale-95 disabled:opacity-45 disabled:pointer-events-none relative overflow-hidden"
+                    className="group flex items-center gap-1 md:gap-1.5 text-[0.55rem] md:text-[0.65rem] uppercase tracking-widest font-mono px-2 md:px-3 py-1.5 rounded-lg border border-[#a855f7]/50 text-[#c084fc] bg-[#a855f7]/10 hover:bg-[#a855f7]/20 transition-all shadow-[0_0_12px_rgba(168,85,247,0.15)] active:scale-95 disabled:opacity-45 disabled:pointer-events-none relative overflow-hidden"
                   >
-                    <Sparkles size={13} className="text-[#a855f7]" />
-                    AI Command Center
+                    <Sparkles size={12} md:size={13} className="text-[#a855f7]" />
+                    <span className="hidden sm:inline">AI Command Center</span>
+                    <span className="sm:hidden">AI</span>
                   </button>
                 </Tooltip>
 
                 <Tooltip content="Edit Network State" shortcut="E" position="bottom" delay={200}>
                   <button
                     onClick={() => setIsEditMode(!isEditMode)}
-                    className={`flex items-center gap-1.5 text-[0.65rem] uppercase tracking-widest font-mono px-3 py-1.5 rounded-lg border transition-all active:scale-95 ${
+                    className={`flex items-center gap-1 md:gap-1.5 text-[0.55rem] md:text-[0.65rem] uppercase tracking-widest font-mono px-2 md:px-3 py-1.5 rounded-lg border transition-all active:scale-95 ${
                       isEditMode 
                         ? 'border-[#f59e0b] text-[#f59e0b] bg-[#f59e0b]/10 shadow-[0_0_12px_rgba(245,158,11,0.15)]' 
                         : 'border-white/10 text-gray-300 hover:text-blue-400 hover:border-blue-500/50 hover:bg-blue-500/10'
                     }`}
                   >
                     {isEditMode && <span className="w-1.5 h-1.5 rounded-full bg-[#f59e0b] animate-pulse"></span>}
-                    <Edit3 size={13} />
-                    {isEditMode ? 'EDITING' : 'Builder Mode'}
+                    <Edit3 size={12} md:size={13} />
+                    <span className="hidden sm:inline">{isEditMode ? 'EDITING' : 'Builder Mode'}</span>
+                    <span className="sm:hidden">{isEditMode ? 'EDIT' : 'BUILD'}</span>
                   </button>
                 </Tooltip>
               </div>
 
-              {/* Separator */}
-              <div className="w-px h-4 bg-white/10 mx-1"></div>
+              {/* Separator - Hidden on mobile */}
+              <div className="w-px h-4 bg-white/10 mx-1 hidden md:block"></div>
 
               {/* Right: Actions */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 md:gap-2">
                  <Tooltip content={isPanelOpen ? "Hide Intelligence Panel" : "Show Intelligence Panel"} position="bottom" delay={300}>
                    <button
                      onClick={() => setIsPanelOpen(!isPanelOpen)}
@@ -397,15 +410,23 @@ Return ONLY a short, punchy 1-4 word label for a NEW logical sub-topic or branch
                         : "bg-[#131a28]/80 text-gray-400 border-white/10 hover:text-white"
                      } ${!selectedNode ? "opacity-50 cursor-not-allowed" : ""}`}
                    >
-                     <PanelRight size={14} />
+                     <PanelRight size={13} className="md:w-[14px] md:h-[14px]" />
                    </button>
                  </Tooltip>
                  
-                 <div className="w-px h-4 bg-white/10 mx-1"></div>
+                 <div className="w-px h-4 bg-white/10 mx-0.5 md:mx-1 hidden sm:block"></div>
 
                  <Tooltip content="Share Environment" shortcut="S" position="bottom" delay={300}>
-                   <button className="p-1.5 border border-white/10 rounded-lg text-gray-400 hover:text-blue-400 hover:border-blue-500/50 hover:bg-blue-500/10 transition-all active:scale-95">
-                     <Share2 size={14} />
+                   <button className="p-1.5 border border-white/10 rounded-lg text-gray-400 hover:text-blue-400 hover:border-blue-500/50 hover:bg-blue-500/10 transition-all active:scale-95 hidden sm:flex">
+                     <Share2 size={13} className="md:w-[14px] md:h-[14px]" />
+                   </button>
+                 </Tooltip>
+                 <Tooltip content="Export PDF Report" shortcut="P" position="bottom" delay={300}>
+                   <button
+                      onClick={handleExportPDF}
+                      className="p-1.5 border border-[#c084fc]/30 rounded-lg text-[#c084fc] hover:text-[#d8b4fe] hover:border-[#c084fc]/60 hover:bg-[#c084fc]/10 transition-all active:scale-95"
+                   >
+                     <FileText size={13} className="md:w-[14px] md:h-[14px]" />
                    </button>
                  </Tooltip>
                  <Tooltip content="Export JSON Graph" shortcut="X" position="bottom" delay={300}>
@@ -413,19 +434,19 @@ Return ONLY a short, punchy 1-4 word label for a NEW logical sub-topic or branch
                       onClick={handleExportMap}
                       className="p-1.5 border border-white/10 rounded-lg text-gray-400 hover:text-blue-400 hover:border-blue-500/50 hover:bg-blue-500/10 transition-all active:scale-95"
                    >
-                     <Download size={14} />
+                     <Download size={13} className="md:w-[14px] md:h-[14px]" />
                    </button>
                  </Tooltip>
                  <Tooltip content="Scrub Canvas" shortcut="C" position="bottom" delay={300}>
                    <button 
-                      className="p-1.5 border border-white/10 rounded-lg text-gray-400 hover:text-red-400 hover:border-red-500/50 hover:bg-red-500/10 transition-all ml-1 active:scale-95" 
+                      className="p-1.5 border border-white/10 rounded-lg text-gray-400 hover:text-red-400 hover:border-red-500/50 hover:bg-red-500/10 transition-all ml-0.5 md:ml-1 active:scale-95" 
                       onClick={() => {
                         if(window.confirm('Clear all data from map?')) {
                           setGlobalGraph(null);
                           setIsPanelOpen(false);
                         }
                       }}>
-                     <Maximize2 size={14} className="rotate-45" />
+                     <Maximize2 size={13} className="md:w-[14px] md:h-[14px] rotate-45" />
                    </button>
                  </Tooltip>
               </div>
@@ -456,30 +477,37 @@ Return ONLY a short, punchy 1-4 word label for a NEW logical sub-topic or branch
           />
 
           {/* Footer / Status Bar */}
-          <footer className="fixed bottom-0 left-0 right-0 h-7 bg-[#080c14]/80 backdrop-blur-[20px] border-t border-white/5 z-40 flex items-center justify-between px-4 font-mono text-[9px] text-[#5e7090] tracking-widest uppercase select-none">
-            <div className="flex items-center gap-4">
-              <span className="flex items-center gap-1.5">
+          <footer className="fixed bottom-0 left-0 right-0 h-7 bg-[#080c14]/80 backdrop-blur-[20px] border-t border-white/5 z-40 flex items-center justify-between px-2 md:px-4 font-mono text-[8px] md:text-[9px] text-[#5e7090] tracking-widest uppercase select-none">
+            <div className="flex items-center gap-2 md:gap-4">
+              <span className="flex items-center gap-1 md:gap-1.5">
                 <span className={isEditMode ? "w-1.5 h-1.5 rounded-full bg-[#f59e0b] shadow-[0_0_5px_rgba(245,158,11,0.6)]" : "w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_5px_rgba(59,130,246,0.5)]"}></span>
-                {isEditMode ? 'Edit Mode Active' : 'Navigation Mode'}
+                <span className="hidden sm:inline">{isEditMode ? 'Edit Mode Active' : 'Navigation Mode'}</span>
+                <span className="sm:hidden">{isEditMode ? 'EDIT' : 'NAV'}</span>
               </span>
-              <div className="w-px h-3 bg-white/10"></div>
-              <span>Nodes: <span className="text-gray-300 font-medium tabular-nums">{globalGraph.nodes.length}</span></span>
-              <span>Edges: <span className="text-gray-300 font-medium tabular-nums">{globalGraph.links.length}</span></span>
+              <div className="w-px h-3 bg-white/10 hidden sm:block"></div>
+              <span className="hidden sm:inline">Nodes: <span className="text-gray-300 font-medium tabular-nums">{globalGraph.nodes.length}</span></span>
+              <span className="hidden sm:inline">Edges: <span className="text-gray-300 font-medium tabular-nums">{globalGraph.links.length}</span></span>
+              <span className="sm:hidden text-gray-300 font-medium tabular-nums">{globalGraph.nodes.length}N/{globalGraph.links.length}E</span>
             </div>
-                        {/* Navigation Pill Buttons */}
-              <div className="flex bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.12)] p-1 rounded-full backdrop-blur-md shadow-sm">
+                        {/* Navigation Pill Buttons - Hidden on mobile */}
+              <div className="hidden md:flex bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.12)] p-1 rounded-full backdrop-blur-md shadow-sm">
                  <button className="px-5 py-1.5 text-[0.7rem] uppercase tracking-wider font-semibold rounded-full bg-white/10 text-white shadow-sm transition-all">Home</button>
                  <button className="px-5 py-1.5 text-[0.7rem] uppercase tracking-wider font-semibold rounded-full text-gray-400 hover:text-white hover:bg-[rgba(255,255,255,0.12)] transition-all">History</button>
                  <button className="px-5 py-1.5 text-[0.7rem] uppercase tracking-wider font-semibold rounded-full text-gray-400 hover:text-white hover:bg-[rgba(255,255,255,0.12)] transition-all flex items-center gap-2">Monitor <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span></button>
               </div>
             
-            <div className="flex items-center gap-4">
-              <span className="flex items-center gap-1.5 text-emerald-500/80">
+            <div className="flex items-center gap-2 md:gap-4">
+              <span className="hidden md:flex items-center gap-1.5 text-emerald-500/80">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                 Local DB Connected
               </span>
-              <div className="w-px h-3 bg-white/10"></div>
-              <span className="text-gray-500">Universal Graph Engine</span>
+              <span className="md:hidden flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className="text-emerald-500/80">DB</span>
+              </span>
+              <div className="w-px h-3 bg-white/10 hidden sm:block"></div>
+              <span className="text-gray-500 hidden lg:inline">Universal Graph Engine</span>
+              <span className="text-gray-500 lg:hidden hidden sm:inline">UGE</span>
             </div>
           </footer>
         </>
