@@ -94,12 +94,22 @@ export default function GraphEngine({ viewGraph, centerId, isEditMode, selectedN
     return stars;
   }, []);
 
-  const sortedGraph = useMemo(() => {
-     if(!viewGraph) return {nodes:[], links:[]};
-     const nodes = [...viewGraph.nodes].map(n => ({...n, createdAt: n.createdAt || Date.now()}))
+  const { sortedGraph, timelineBounds } = useMemo(() => {
+     if (!viewGraph || !viewGraph.nodes) return { sortedGraph: { nodes: [], links: [] }, timelineBounds: { min: Date.now(), max: Date.now() } };
+     const nodes = [...viewGraph.nodes]
+         .map(n => ({...n, createdAt: n.createdAt || Date.now()}))
          .sort((a,b) => (TIER_ORDER[a.type] || 0) - (TIER_ORDER[b.type] || 0));
      const links = [...viewGraph.links].map(l => ({...l, createdAt: l.createdAt || Date.now()}));
-     return { nodes, links };
+     
+     // Calculate global age bounds for timeline color coding
+     const times = nodes.map(n => n.createdAt);
+     const minTime = times.length > 0 ? Math.min(...times) : Date.now();
+     const maxTime = times.length > 0 ? Math.max(...times) : Date.now();
+     
+     return { 
+         sortedGraph: { nodes, links },
+         timelineBounds: { min: minTime, max: maxTime }
+     };
   }, [viewGraph]);
 
   const hoverLinks = useMemo(() => {
@@ -142,6 +152,19 @@ export default function GraphEngine({ viewGraph, centerId, isEditMode, selectedN
     let strokeColor = '#ffffff';
     let strokeWidth = 1.0;
     
+    // Calculate chronologial color logic
+    const { min, max } = timelineBounds;
+    const timeRange = max - min;
+    // Normalized age: 0.0 (oldest) to 1.0 (newest). Default to 0.5 if range is 0.
+    const normalizedAge = timeRange === 0 ? 0.5 : (node.createdAt - min) / timeRange;
+    
+    // Map normalized age (0 -> 1) to Hue (0 -> 220)
+    // 0 = Red (Oldest), 60 = Yellow, 120 = Green, 180 = Cyan, 220 = Blue (Newest)
+    const baseHue = Math.floor(normalizedAge * 220);
+    const nodeColorPrimary = `hsl(${baseHue}, 80%, 60%)`; // Vibrant mid-tone
+    const nodeColorDark = `hsl(${baseHue}, 90%, 40%)`; // Deep rich tone
+    const nodeColorLight = `hsl(${baseHue}, 100%, 85%)`; // Bright highlight
+
     // Glassmorphism Center Hub
     if (isCenter) {
         fillColor = 'rgba(20, 20, 40, 0.7)'; // Frosted dark
@@ -152,10 +175,9 @@ export default function GraphEngine({ viewGraph, centerId, isEditMode, selectedN
     } else if (node.type === 'macro' || node.type === 'central_hub') {
         fillColor = 'transparent'; 
         strokeColor = 'rgba(255, 255, 255, 0.5)'; 
-    } else if (node.type === 'trend' || node.type === 'key_driver') {
-        strokeColor = '#60a5fa'; 
-    } else if (node.type === 'risk') {
-        strokeColor = '#ef4444'; 
+    } else {
+        // Apply chronological color as the base stroke for all standard nodes
+        strokeColor = nodeColorPrimary; 
     }
 
     if (dimOtherNodes) {
@@ -173,7 +195,7 @@ export default function GraphEngine({ viewGraph, centerId, isEditMode, selectedN
     ctx.beginPath();
     ctx.arc(node.x, node.y, size, 0, 2 * Math.PI, false);
     
-    // Apply center hub gradient stroke
+    // Apply chronological glow and gradient logic
     if (isCenter && !dimOtherNodes) {
         const grd = ctx.createLinearGradient(node.x - size, node.y - size, node.x + size, node.y + size);
         grd.addColorStop(0, '#4A90D9');
@@ -185,16 +207,23 @@ export default function GraphEngine({ viewGraph, centerId, isEditMode, selectedN
         ctx.shadowBlur = 20 + (pulse * 30);
         ctx.shadowColor = `rgba(74, 144, 217, ${0.3 + pulse * 0.3})`;
     } else if (!dimOtherNodes && (node.type === 'trend' || node.type === 'key_driver' || node.type === 'issue')) {
-        // Inner Ring Gradient Fill
+        // Inner Ring Gradient Fill mapped to chronological color
         const radGrd = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, size);
-        radGrd.addColorStop(0, '#ffffff');
-        radGrd.addColorStop(1, '#4A90D9');
+        radGrd.addColorStop(0, '#ffffff'); // Center hot white
+        radGrd.addColorStop(0.4, nodeColorLight); // Inner bright
+        radGrd.addColorStop(1, nodeColorDark); // Edge rich
         fillColor = radGrd;
         strokeColor = 'transparent';
+        if (isHovered || isConnectedHover) {
+            ctx.shadowColor = nodeColorPrimary;
+        }
     } else if (!dimOtherNodes && (node.type === 'satellite' || node.type === 'peripheral_topic')) {
         // Outer Ring - hollow
         fillColor = 'transparent';
-        if (isConnectedHover) strokeColor = '#F5A623'; // amber accent
+        if (isConnectedHover) strokeColor = nodeColorLight;
+        if (isHovered || isConnectedHover) {
+            ctx.shadowColor = nodeColorPrimary;
+        }
     }
 
     if (fillColor !== 'transparent') {

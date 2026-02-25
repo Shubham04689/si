@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 /**
  * Generates a formatted PDF report from the Strategic Map graph data.
@@ -149,7 +149,7 @@ export const generatePDFReport = (graphData) => {
         ];
     });
 
-    doc.autoTable({
+    autoTable(doc, {
         startY: currentY,
         head: [['Source Node', 'Relationship', 'Target Node', 'Gravity']],
         body: tableBody,

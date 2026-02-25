@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { X, FileText, ExternalLink, BarChart2, AlertTriangle, MessageSquare, Layers, Plus, Save, Edit2, Link as LinkIcon, ChevronRight, Activity, GitCommit, Search, Sparkles, SlidersHorizontal, Maximize2, Minimize2, Shuffle, FileType } from 'lucide-react';
+import { 
+  X, FileText, ExternalLink, BarChart2, AlertTriangle, MessageSquare, Layers, Plus, Save, Edit2, Link as LinkIcon, ChevronRight, Activity, GitCommit, Search, Sparkles, SlidersHorizontal, Maximize2, Minimize2, FileType, Network, Settings, BookOpen, Clock, Play, Brain
+} from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import ReactMarkdown from 'react-markdown';
-import { generateJSONCompletion } from '../utils/aiEngine';
+import { generateJSONCompletion, suggestConnections } from '../utils/aiEngine';
 
 export function cn(...inputs) {
   return twMerge(clsx(inputs));
@@ -112,14 +114,45 @@ export default function IntelligencePanel({ node, isOpen, onClose, isEditMode, o
     }
   }, [node]);
 
-  const handleGenerateSuggestions = () => {
+  const handleGenerateSuggestions = async () => {
     setIsGenerating(true);
-    setTimeout(() => {
+    try {
+      const unconnected = allNodes.filter(n => n.id !== node?.id && !connectedNodeIds.has(n.id));
+      if (unconnected.length === 0) {
+        setAiSuggestions([]);
+        setIsGenerating(false);
+        return;
+      }
+
+      // Pass the active node and pool of unconnected nodes to the AI
+      const aiSuggestedIds = await suggestConnections(node, unconnected);
+      
+      if (aiSuggestedIds && aiSuggestedIds.length > 0) {
+        // Map returned IDs back to full node objects
+        const matchedNodes = aiSuggestedIds
+            .map(id => unconnected.find(n => n.id === id))
+            .filter(Boolean); // remove any undefined (hallucinations)
+        
+        // If we got valid matches, use them
+        if (matchedNodes.length > 0) {
+           setAiSuggestions(matchedNodes.slice(0, 4));
+           setIsGenerating(false);
+           return;
+        }
+      }
+      
+      // Fallback: if AI returns empty or invalid IDs, fallback to sensible random
+      console.log("AI suggestions empty or invalid, falling back to random suggestions");
+      const shuffled = [...unconnected].sort(() => 0.5 - Math.random());
+      setAiSuggestions(shuffled.slice(0, 4));
+    } catch (err) {
+      console.error("Failed to generate contextual suggestions, falling back to random:", err);
       const unconnected = allNodes.filter(n => n.id !== node?.id && !connectedNodeIds.has(n.id));
       const shuffled = [...unconnected].sort(() => 0.5 - Math.random());
       setAiSuggestions(shuffled.slice(0, 4));
+    } finally {
       setIsGenerating(false);
-    }, 1000);
+    }
   };
 
   const handleSaveEdit = () => {
@@ -737,19 +770,18 @@ You must return a raw JSON object with exactly these keys:
                 )}
 
                 {/* Connection Suggestions Box */}
-                <div className="mt-8">
-                  <h3 className="text-[10px] font-mono tracking-widest uppercase text-[#c084fc] flex items-center gap-2 mb-4">
-                    <Shuffle size={12} /> Suggest Random Connections
-                  </h3>
-                  
+                <div className="bg-[#0b101e]/60 border border-white/5 rounded-xl p-3.5 mb-6">
+                  <div className="flex items-center gap-2 mb-3 text-gray-400 text-xs font-semibold tracking-wider uppercase">
+                    <Brain size={12} /> Suggest Co-Related Connections
+                  </div>
                   {aiSuggestions.length === 0 ? (
-                    <button 
+                    <div 
                       onClick={handleGenerateSuggestions}
-                      disabled={isGenerating}
-                      className="w-full flex items-center justify-center gap-2 p-3 bg-purple-500/10 hover:bg-purple-500/20 text-[#c084fc] border border-purple-500/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] rounded-xl transition-all font-medium text-xs disabled:opacity-50"
+                      className="w-full flex items-center justify-center gap-2 py-4 border border-dashed border-white/10 rounded-lg text-gray-500 hover:text-white hover:border-white/30 hover:bg-white/5 cursor-pointer transition-all"
                     >
-                      {isGenerating ? 'Selecting...' : 'Suggest Random Connections'}
-                    </button>
+                      {isGenerating ? <Sparkles size={14} className="animate-pulse text-[#c084fc]" /> : <Brain size={14} className="text-[#c084fc]" />}
+                      {isGenerating ? 'Analyzing Topology...' : 'Suggest Co-Related Connections'}
+                    </div>
                   ) : (
                     <div className="space-y-2 p-4 bg-purple-500/5 border border-purple-500/20 rounded-xl relative overflow-hidden">
                       <div className="absolute top-0 left-0 w-1 h-full bg-[#c084fc] shadow-[0_0_8px_rgba(168,85,247,0.6)]"></div>

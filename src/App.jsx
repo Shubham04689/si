@@ -3,6 +3,7 @@ import DataLoader from './components/DataLoader';
 import GraphEngine from './components/GraphEngine';
 import IntelligencePanel from './components/IntelligencePanel';
 import AiCommandCenter from './components/AiCommandCenter';
+import HistoryMindMap from './components/HistoryMindMap';
 import { filterGraph } from './utils/graphFilter';
 import { Share2, Maximize2, Download, Edit3, Sparkles, PanelRight, FileText } from 'lucide-react';
 import Tooltip from './components/Tooltip';
@@ -12,6 +13,7 @@ import { generateCompletion } from './utils/aiEngine';
 import { generatePDFReport } from './utils/exportUtils';
 
 export default function App() {
+  const [activeTab, setActiveTab] = useState('home');
   const [globalGraph, setGlobalGraph] = useState(null);
   const [viewGraph, setViewGraph] = useState({ nodes: [], links: [] });
   
@@ -295,15 +297,26 @@ Return ONLY a short, punchy 1-4 word label for a NEW logical sub-topic or branch
         <DataLoader onDataLoaded={handleDataLoaded} />
       ) : (
         <>
-          <GraphEngine 
-            viewGraph={viewGraph} 
-            centerId={centerId} 
-            isEditMode={isEditMode}
-            onNodeClick={handleNodeClick} 
-            onNodeRightClick={handleNodeRightClick}
-            onAddNodeClick={handleAddNodeQuick}
-            onRemoveNodeClick={handleRemoveNodeQuick}
-          />
+          {activeTab === 'home' ? (
+             <GraphEngine 
+               viewGraph={viewGraph} 
+               centerId={centerId} 
+               isEditMode={isEditMode}
+               onNodeClick={handleNodeClick} 
+               onNodeRightClick={handleNodeRightClick}
+               onAddNodeClick={handleAddNodeQuick}
+               onRemoveNodeClick={handleRemoveNodeQuick}
+             />
+          ) : (
+             <HistoryMindMap 
+               globalGraph={globalGraph} 
+               centerId={centerId} 
+               onNodeClick={(n) => {
+                  handleNodeClick(n);
+                  setActiveTab('home'); // jump back to home graph when a node is selected from history
+               }} 
+             />
+          )}
           
           <ContextMenu 
             isOpen={contextMenuState.isOpen}
@@ -491,8 +504,18 @@ Return ONLY a short, punchy 1-4 word label for a NEW logical sub-topic or branch
             </div>
                         {/* Navigation Pill Buttons - Hidden on mobile */}
               <div className="hidden md:flex bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.12)] p-1 rounded-full backdrop-blur-md shadow-sm">
-                 <button className="px-5 py-1.5 text-[0.7rem] uppercase tracking-wider font-semibold rounded-full bg-white/10 text-white shadow-sm transition-all">Home</button>
-                 <button className="px-5 py-1.5 text-[0.7rem] uppercase tracking-wider font-semibold rounded-full text-gray-400 hover:text-white hover:bg-[rgba(255,255,255,0.12)] transition-all">History</button>
+                 <button 
+                    onClick={() => setActiveTab('home')}
+                    className={`px-5 py-1.5 text-[0.7rem] uppercase tracking-wider font-semibold rounded-full shadow-sm transition-all ${activeTab === 'home' ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-[rgba(255,255,255,0.12)]'}`}
+                 >
+                    Home
+                 </button>
+                 <button 
+                    onClick={() => setActiveTab('history')}
+                    className={`px-5 py-1.5 text-[0.7rem] uppercase tracking-wider font-semibold rounded-full shadow-sm transition-all ${activeTab === 'history' ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-[rgba(255,255,255,0.12)]'}`}
+                 >
+                    History
+                 </button>
                  <button className="px-5 py-1.5 text-[0.7rem] uppercase tracking-wider font-semibold rounded-full text-gray-400 hover:text-white hover:bg-[rgba(255,255,255,0.12)] transition-all flex items-center gap-2">Monitor <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span></button>
               </div>
             
